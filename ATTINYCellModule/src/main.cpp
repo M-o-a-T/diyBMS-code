@@ -347,7 +347,7 @@ void loop()
     //Reset PID to defaults, in case we want to start balancing
     myPID.clear();
 
-    //Switch of TX - save power
+    //Switch off TX - save power
     DiyBMSATTiny841::DisableSerial0TX();
 
     //Wake up on Serial port RX

@@ -18,6 +18,10 @@
 
 #define maximum_cell_modules 16
 
+#if maximum_cell_modules<16
+#error Read Config requires 16 words
+#endif
+
 //NOTE THIS MUST BE EVEN IN SIZE (BYTES) ESP8266 IS 32 BIT AND WILL ALIGN AS SUCH!
 struct PacketStruct
 {

@@ -239,7 +239,6 @@ bool PacketProcessor::processPacket(PacketStruct *buffer)
     return true;
 
   case COMMAND::ReadVoltageAndStatus:
-  {
     //Read voltage of VCC
     //Maximum voltage 8191mV
     buffer->moduledata[moduledata_index] = CellVoltage() & 0x1FFF;
@@ -262,72 +261,61 @@ bool PacketProcessor::processPacket(PacketStruct *buffer)
     }
 
     return true;
-  }
 
   case COMMAND::Timing:
-  {
     //Do nothing just accept and pass on the packet
     return true;
-  }
 
   case COMMAND::Identify:
-  {
     //identify module
     //For the next 10 received packets - keep the LEDs lit up
     identifyModule = 10;
     return true;
-  }
 
   case COMMAND::ReadTemperature:
-  {
     //Return the last known temperature values recorded by the ADC (both internal and external)
     buffer->moduledata[moduledata_index] = TemperatureMeasurement();
     return true;
-  }
 
   case COMMAND::ReadBalancePowerPWM:
-  {
     //Read the last PWM value
     //Use WeAreInBypass instead of IsByPassActive() as the later also includes the "settle" time
     buffer->moduledata[moduledata_index] = WeAreInBypass ? PWMSetPoint : 0;
     return true;
-  }
 
   case COMMAND::ReadBadPacketCounter:
-  {
     //Report number of bad packets
     buffer->moduledata[moduledata_index] = badpackets;
     return true;
-  }
 
   case COMMAND::ReadSettings:
-  {
-    //Report settings/configuration, fills whole moduledata buffer up
+    {
+        //Report settings/configuration, fills whole moduledata buffer up
 
-    FLOATUNION_t myFloat;
-    myFloat.number = (float)LOAD_RESISTANCE;
-    buffer->moduledata[0] = myFloat.word[0];
-    buffer->moduledata[1] = myFloat.word[1];
+        FLOATUNION_t myFloat;
+        myFloat.number = (float)LOAD_RESISTANCE;
+        buffer->moduledata[0] = myFloat.word[0];
+        buffer->moduledata[1] = myFloat.word[1];
 
-    myFloat.number = _config->Calibration;
-    buffer->moduledata[2] = myFloat.word[0];
-    buffer->moduledata[3] = myFloat.word[1];
+        myFloat.number = _config->Calibration;
+        buffer->moduledata[2] = myFloat.word[0];
+        buffer->moduledata[3] = myFloat.word[1];
 
-    myFloat.number = (float)MV_PER_ADC;
-    buffer->moduledata[4] = myFloat.word[0];
-    buffer->moduledata[5] = myFloat.word[1];
+        myFloat.number = (float)MV_PER_ADC;
+        buffer->moduledata[4] = myFloat.word[0];
+        buffer->moduledata[5] = myFloat.word[1];
 
-    buffer->moduledata[6] = _config->BypassTemperatureSetPoint;
-    buffer->moduledata[7] = _config->BypassThresholdmV;
-    buffer->moduledata[8] = INT_BCOEFFICIENT;
-    buffer->moduledata[9] = EXT_BCOEFFICIENT;
-    buffer->moduledata[10] = DIYBMSMODULEVERSION;
+        buffer->moduledata[6] = _config->BypassTemperatureSetPoint;
+        buffer->moduledata[7] = _config->BypassThresholdmV;
+        buffer->moduledata[8] = INT_BCOEFFICIENT;
+        buffer->moduledata[9] = EXT_BCOEFFICIENT;
+        buffer->moduledata[10] = DIYBMSMODULEVERSION;
 
-    //Version of firmware (taken automatically from GIT)
-    buffer->moduledata[14] = GIT_VERSION_B1;
-    buffer->moduledata[15] = GIT_VERSION_B2;
-    return true;
-  }
+        //Version of firmware (taken automatically from GIT)
+        buffer->moduledata[14] = GIT_VERSION_B1;
+        buffer->moduledata[15] = GIT_VERSION_B2;
+        return true;
+    }
 
   case COMMAND::WriteSettings:
   {

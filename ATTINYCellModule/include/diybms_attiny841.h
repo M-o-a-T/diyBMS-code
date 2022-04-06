@@ -185,8 +185,6 @@ public:
 
    static void EnableStartFrameDetection()
    {
-      noInterrupts();
-
       // Enable Start Frame Detection
       UCSR0D = (1 << RXSIE0) | (1 << SFDE0);
 
