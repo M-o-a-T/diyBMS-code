@@ -146,9 +146,14 @@ public:
       Serial.flush();
 
    }
-   static bool CheckSerialIdle() {
-      return // bit_is_set(UCSR0A, UDRE0) ||
-        bit_is_clear(UCSR0A, TXC0);
+   static bool CheckSerial0Idle()
+   {
+      return bit_is_set(UCSR0A, TXC0) && bit_is_set(UCSR0A, UDRE0);
+   }
+
+   static bool CheckSerial1Idle()
+   {
+      return bit_is_set(UCSR1A, TXC1) && bit_is_set(UCSR1A, UDRE1);
    }
 
    static void DisableSerial0TX()

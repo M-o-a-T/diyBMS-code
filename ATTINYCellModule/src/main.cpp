@@ -72,7 +72,7 @@ CellModuleConfig myConfig;
 
 //DiyBMSATTiny841 hardware;
 
-PacketProcessor PP(&myConfig);
+PacketProcessor PP(&myConfig, &myPacketSerial);
 
 volatile bool wdt_triggered = false;
 
@@ -85,35 +85,21 @@ volatile uint16_t OnPulseCount = 0;
 void DefaultConfig()
 {
   //About 2.2007 seems about right
-  myConfig.Calibration = 2.2007;
+  myConfig.Calibration = 0x0440; // 2.2007
 
   //2mV per ADC resolution
   //myConfig.mVPerADC = 2.0; //2048.0/1024.0;
 
 #if defined(DIYBMSMODULEVERSION) && (DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20))
   //Keep temperature low for modules with R19 and R20 not swapped
-  myConfig.BypassTemperatureSetPoint = 45;
+  myConfig.BypassTemperature = 715; // 45 degC
 #else
   //Stop running bypass if temperature over 65 degrees C
-  myConfig.BypassTemperatureSetPoint = 65;
+  myConfig.BypassTemperature = 850; // 65 degC
 #endif
 
   //Start bypass at 4.1V
-  myConfig.BypassThresholdmV = 4100;
-
-  //#if defined(DIYBMSMODULEVERSION) && (DIYBMSMODULEVERSION == 430 || DIYBMSMODULEVERSION == 420 || DIYBMSMODULEVERSION == 421)
-  //Murata Electronics NCP18WB473J03RB = 47K ±5% 4050K ±2% 100mW 0603 NTC Thermistors RoHS
-  //myConfig.Internal_BCoefficient = 4050;
-  //#else
-  //4150 = B constant (25-50℃)
-  //myConfig.Internal_BCoefficient = 4150;
-  //#endif
-
-  //4150 = B constant (25-50℃)
-  //myConfig.External_BCoefficient = 4150;
-
-  // Resistance @ 25℃ = 47k, B Constant 4150, 0.20mA max current
-  //Using https://www.thinksrs.com/downloads/programs/therm%20calc/ntccalibrator/ntccalculator.html
+  myConfig.BypassThreshold = 955; // 4100/4398*1024 -- way too high for lifepo4 cells
 }
 
 ISR(WDT_vect)
@@ -129,27 +115,22 @@ ISR(ADC_vect)
   PP.ADCReading(DiyBMSATTiny841::ReadADC());
 }
 
-void onPacketReceived()
+void onPacketHeader()
 {
   DiyBMSATTiny841::EnableSerial0TX();
 
   //A data packet has just arrived, process it and forward the results to the next module
-  if (PP.onPacketReceived((PacketStruct *)SerialPacketReceiveBuffer))
-  {
-    //Only light Notification if packet is good
-    DiyBMSATTiny841::NotificationLedOn();
-  }
+  PP.onHeaderReceived((PacketStruct *)SerialPacketReceiveBuffer);
+}
 
-  //Send the packet (fixed length!)
-  myPacketSerial.sendBuffer(SerialPacketReceiveBuffer, sizeof(PacketStruct));
+void onReadReceived()
+{
+  PP.onReadReceived((PacketStruct *)SerialPacketReceiveBuffer);
+}
 
-  //PLATFORM ATTINYCORE version is 1.3.2 which is old, and SERIAL.FLUSH simply clears the buffer (bad)
-  //Therefore we use 1.4.1 which has the correct code to wait until the buffer is empty.
-  DiyBMSATTiny841::FlushSerial0();
-
-  DiyBMSATTiny841::NotificationLedOff();
-
-  //PacketProcessed = true;
+void onPacketReceived()
+{
+  PP.onPacketReceived((PacketStruct *)SerialPacketReceiveBuffer);
 }
 
 ISR(USART0_START_vect)
@@ -170,21 +151,21 @@ FastPID myPID(5.0, 1.0, 0.1, 3, 8, false);
 
 void ValidateConfiguration()
 {
-  if (myConfig.Calibration < 1.9)
+  if (myConfig.Calibration == 0)
   {
-    myConfig.Calibration = 2.21000;
+    myConfig.Calibration = 0x0440; // 2.007
   }
 
-  if (myConfig.BypassTemperatureSetPoint > DIYBMS_MODULE_SafetyTemperatureCutoff)
+  if (myConfig.BypassTemperature > DIYBMS_MODULE_SafetyTemperatureCutoff)
   {
-    myConfig.BypassTemperatureSetPoint = 55;
+    myConfig.BypassTemperature = DIYBMS_MODULE_SafetyTemperatureCutoff;
   }
 
 #if defined(DIYBMSMODULEVERSION) && (DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20))
   //Keep temperature low for modules with R19 and R20 not swapped
-  if (myConfig.BypassTemperatureSetPoint > 45)
+  if (myConfig.BypassTemperature > 715)
   {
-    myConfig.BypassTemperatureSetPoint = 45;
+    myConfig.BypassTemperature = 715;
   }
 #endif
 }
@@ -225,14 +206,12 @@ void setup()
 
   // Start talking
   DiyBMSATTiny841::EnableSerial0();
-  PP.writeBufferSize = Serial.availableForWrite();
 
   //Check if setup routine needs to be run
   if (!Settings::ReadConfigFromEEPROM((uint8_t *)&myConfig, sizeof(myConfig), EEPROM_CONFIG_ADDRESS))
   {
     DefaultConfig();
-    //No need to save here as the default config will load every time if the CRC is wrong
-    //Settings::WriteConfigToEEPROM((uint8_t *)&myConfig, sizeof(myConfig), EEPROM_CONFIG_ADDRESS);
+    //No need to save here, as the default config will load whenever the CRC is wrong
   }
 
   ValidateConfiguration();
@@ -251,7 +230,7 @@ void setup()
   //Set up data handler
   Serial.begin(BAUD, SERIAL_8N1);
 
-  myPacketSerial.begin(&Serial, nullptr, &onPacketReceived, SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer));
+  myPacketSerial.begin(&Serial, &onPacketHeader, &onReadReceived, &onPacketReceived, SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer));
 }
 
 ISR(TIMER1_COMPA_vect)
@@ -289,21 +268,7 @@ ISR(TIMER1_COMPA_vect)
 
   if (PulsePeriod == 1000)
   {
-
-    // Floats are not good on ATTINY/8bit controllers, need to look at moving to fixed decimal/integer calculations
-
-    //CellVoltage is in millivolts, so we get milli-amp current reading out.
-    //For example 4000mV / 4.4R = 909.0909mA
-    float CurrentmA = ((float)PP.CellVoltage() / (float)LOAD_RESISTANCE);
-
-    //Scale down to the number of "ON" pulses
-    //Assuming 100% on, 909.0909mA * (1000/1000) * 0.0002777 = 0.2525 milli amp hours (or 0.000252 amp hours)
-    float milliAmpHours = (CurrentmA * ((float)OnPulseCount / (float)1000.0)) * (1.0 / 3600.0);
-
-    //0.2525 * 3600 / 1000 = 0.909Ah
-
-    //Keep running total
-    PP.MilliAmpHourBalanceCounter += milliAmpHours;
+    PP.IncrementBalanceCounter(OnPulseCount);
 
     OnPulseCount = 0;
     PulsePeriod = 0;
@@ -320,7 +285,7 @@ inline void identifyModule()
 #endif
     PP.identifyModule--;
 
-    if (PP.identifyModule == 0)
+    if (DiyBMSATTiny841::CheckSerial0Idle() && myPacketSerial.isIdle() && PP.identifyModule == 0)
     {
       DiyBMSATTiny841::NotificationLedOff();
 #if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 430
@@ -344,7 +309,10 @@ void loop()
   }
 
   noInterrupts();
-  if (!PP.WeAreInBypass && PP.bypassHasJustFinished == 0 && Serial.available() == 0 && Serial.availableForWrite() == PP.writeBufferSize && DiyBMSATTiny841::CheckSerialIdle())
+  if (!myPacketSerial.isIdle())
+    DiyBMSATTiny841::NotificationLedOn();
+
+  if (!PP.WeAreInBypass && PP.bypassHasJustFinished == 0 && DiyBMSATTiny841::CheckSerial0Idle())
   {
     //Go to SLEEP, we are not in bypass anymore and no serial data waiting...
 
@@ -415,9 +383,12 @@ void loop()
   myPacketSerial.checkInputStream();
 
   //We should probably check for invalid InternalTemperature ranges here and throw error (shorted or unconnecter thermistor for example)
-  int16_t internal_temperature = PP.InternalTemperature();
+  uint16_t internal_temperature = PP.InternalTemperature();
 
-  if (internal_temperature > DIYBMS_MODULE_SafetyTemperatureCutoff || internal_temperature > (myConfig.BypassTemperatureSetPoint + 10))
+  // this roughly approximates the ADC delta for 1 degC around the current temperature
+  uint16_t temp_delta = (internal_temperature > 950) ? 2 : 21-internal_temperature/50;
+
+  if (internal_temperature > DIYBMS_MODULE_SafetyTemperatureCutoff || internal_temperature > (myConfig.BypassTemperature + 10*temp_delta))
   {
     //Force shut down if temperature is too high although this does run the risk that the voltage on the cell will go high
     //but the BMS controller should shut off the charger in this situation
@@ -448,15 +419,15 @@ void loop()
 
   if (PP.bypassCountDown > 0)
   {
-    if (internal_temperature < (myConfig.BypassTemperatureSetPoint - 6))
+    if (internal_temperature < (myConfig.BypassTemperature - 6*temp_delta))
     {
-      //Full power if we are no where near the setpoint (more than 6 degrees C away)
+      //Full power if we are nowhere near the setpoint (more than 6 degrees C away)
       PP.PWMSetPoint = 0xFF;
     }
     else
     {
       //Compare the real temperature against max setpoint, we want the PID to keep at this temperature
-      PP.PWMSetPoint = myPID.step(myConfig.BypassTemperatureSetPoint, internal_temperature);
+      PP.PWMSetPoint = myPID.step(myConfig.BypassTemperature, internal_temperature);
 
       if (myPID.err())
       {

@@ -1,8 +1,8 @@
 #include "settings.h"
 #include "crc16.h"
 
-void Settings::WriteConfigToEEPROM(uint8_t* settings, uint16_t size, uint16_t eepromStartAddress) {
-  //TODO: We should probably check EEPROM.length() to ensure its big enough
+bool Settings::WriteConfigToEEPROM(uint8_t* settings, uint16_t size, uint16_t eepromStartAddress) {
+  //TODO: We should probably check EEPROM.length() to ensure it's big enough
 
   uint16_t EEPROMaddress=eepromStartAddress;
   for (uint16_t i = 0; i < size; i++) {
@@ -13,6 +13,9 @@ void Settings::WriteConfigToEEPROM(uint8_t* settings, uint16_t size, uint16_t ee
   //Generate and save the checksum for the setting data block
   uint16_t checksum = CRC16_Buffer(settings, size);
   EEPROM.put(eepromStartAddress+size, checksum);
+
+  // verify EEPROM content
+  return Settings::ReadConfigFromEEPROM(settings,size,eepromStartAddress);
 }
 
 bool Settings::ReadConfigFromEEPROM(uint8_t* settings, uint16_t size, uint16_t eepromStartAddress) {
@@ -29,13 +32,7 @@ bool Settings::ReadConfigFromEEPROM(uint8_t* settings, uint16_t size, uint16_t e
   uint16_t existingChecksum;
   EEPROM.get(eepromStartAddress+size, existingChecksum);
 
-  if (checksum == existingChecksum) {
-    //Return TRUE
-    return true;
-  }
-
-  //Original data is now corrupt so return FALSE
-  return false;
+  return checksum == existingChecksum;
 }
 
 void Settings::FactoryDefault(uint16_t size, uint16_t eepromStartAddress) {

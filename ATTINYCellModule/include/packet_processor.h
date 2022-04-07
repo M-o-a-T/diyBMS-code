@@ -2,9 +2,9 @@
 #define DIYBMS_PACKETPROCESSOR_H
 
 #include <Arduino.h>
+#include <SerialPacker.h>
 
 #include "diybms_attiny841.h"
-#include "Steinhart.h"
 #include "defines.h"
 #include "settings.h"
 
@@ -13,48 +13,46 @@
 #define ADC_EXTERNAL_TEMP 2
 
 //Define maximum allowed temperature as safety cut off
-#define DIYBMS_MODULE_SafetyTemperatureCutoff (int16_t)90
+#define DIYBMS_MODULE_SafetyTemperatureCutoff 940 // ~90 degC for B~4000
 
-#define maximum_cell_modules 16
+#define MAX_PACKET_SIZE 16
 
-#if maximum_cell_modules<16
-#error Read Config requires 16 words
-#endif
 
 //NOTE THIS MUST BE EVEN IN SIZE (BYTES) ESP8266 IS 32 BIT AND WILL ALIGN AS SUCH!
-struct PacketStruct
+struct PacketHeader
 {
-  uint8_t start_address;
-  uint8_t end_address;
-  uint8_t command;
+  uint8_t start;
+  unsigned int _reserved:3;
+  unsigned int seen:1;
+  unsigned int command:4;
   uint8_t hops;
-  uint16_t sequence;
-  uint16_t moduledata[maximum_cell_modules];
+  unsigned int cells:5;
+  unsigned int sequence:3;
 } __attribute__((packed));
 
-typedef union
+struct PacketStruct
 {
-  float number;
-  uint8_t bytes[4];
-  uint16_t word[2];
-} FLOATUNION_t;
+  struct PacketHeader h;
+  uint16_t data[MAX_PACKET_SIZE/2+1];
+} __attribute__((packed));
 
+#if MAX_PACKET_SIZE < 10
+#error Config data size is 6 bytes, plus 4 bytes header. Increase MAX_PACKET_SIZE.
+#endif
 class PacketProcessor
 {
 public:
-  PacketProcessor(CellModuleConfig *config)
+  PacketProcessor(CellModuleConfig *config, SerialPacker *packer) : PacketProcessor()
   {
     _config = config;
+    serial = packer;
     SettingsHaveChanged = false;
-    WeAreInBypass = false;
-    bypassCountDown = 0;
-    bypassHasJustFinished = 0;
   }
   ~PacketProcessor() {}
 
-  PacketProcessor(); 
-
-  bool onPacketReceived(PacketStruct *receivebuffer);
+  void onHeaderReceived(PacketStruct *receivebuffer);
+  void onReadReceived(PacketStruct *receivebuffer);
+  void onPacketReceived(PacketStruct *receivebuffer);
 
   void ADCReading(uint16_t value);
   void TakeAnAnalogueReading(uint8_t mode);
@@ -66,60 +64,68 @@ public:
     return watchdog_counter;
   }
 
+  SerialPacker *serial;
+
   bool BypassCheck();
   uint16_t TemperatureMeasurement();
   uint8_t identifyModule;
   bool BypassOverheatCheck();
 
-  int16_t InternalTemperature();
+  int16_t InternalTemperature() {
+    return raw_adc_onboard_temperature;
+  }
 
-  volatile float MilliAmpHourBalanceCounter = 0;
+  volatile uint32_t MilliAmpHourBalanceCounter = 0;
 
   //Returns TRUE if the module is in "bypassing current" mode
-  bool WeAreInBypass;
+  bool WeAreInBypass = false;
 
   //Value of PWM 0-255
   volatile uint8_t PWMSetPoint;
   volatile bool SettingsHaveChanged;
 
   //Count down which runs whilst bypass is in operation,  zero = bypass stopped/off
-  uint16_t bypassCountDown;
+  uint16_t bypassCountDown = 0;
 
   //Count down which starts after the current cycle of bypass has completed (aka cool down period whilst voltage may rise again)
-  uint8_t bypassHasJustFinished;
+  uint8_t bypassHasJustFinished = 0;
 
   bool IsBypassActive()
   {
     return WeAreInBypass || bypassHasJustFinished > 0;
   }
-
-  uint8_t writeBufferSize = 0;
+  void IncrementBalanceCounter(uint16_t val)
+  {
+    MilliAmpHourBalanceCounter += raw_adc_voltage * val;
+  }
 
 private:
+  PacketProcessor();
+
   CellModuleConfig *_config;
+
+  uint16_t bypassThreshold = 0;
+  uint8_t lastSequence = 0;
 
   bool processPacket(PacketStruct *buffer);
 
-  volatile bool ModuleAddressAssignedFlag = false;
   volatile uint8_t adcmode = 0;
   volatile uint16_t raw_adc_voltage;
   volatile uint16_t raw_adc_onboard_temperature;
   volatile uint16_t raw_adc_external_temperature;
 
-  //Cell number in the string (updated dynamically)
-  volatile uint8_t mymoduleaddress = 0;
   //Count of bad packets of data received, most likely with corrupt data or crc errors
-  volatile uint16_t badpackets = 0;
+  uint16_t badpackets = 0;
   //Count of number of WDT events which have triggered, could indicate standalone mode or problems with serial comms
-  volatile uint16_t watchdog_counter = 0;
+  uint16_t watchdog_counter = 0;
 
   uint16_t PacketReceivedCounter = 0;
 
-#if (SAMPLEAVERAGING > 1)
-  volatile uint16_t readings[SAMPLEAVERAGING]; // the readings from the analog input
-  volatile uint16_t readIndex = 0;             // the index of the current reading
-  volatile uint16_t total = 0;                 // the running total
-  volatile uint16_t average = 0;               // the average
+#if SAMPLEAVERAGING > 1
+  uint16_t readings[SAMPLEAVERAGING]; // the readings from the analog input
+  uint16_t readIndex = 0;             // the index of the current reading
+  uint16_t total = 0;                 // the running total
+  uint16_t average = 0;               // the average
 #endif
 };
 

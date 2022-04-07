@@ -33,10 +33,22 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 #define nop  __asm__("nop\n\t");
 
 
+struct ReadConfigData
+{
+    uint16_t boardVersion;
+    uint16_t bypassTemp;
+    uint16_t bypassThreshold;
+    uint8_t numSamples;
+    uint8_t loadResistance;
+    uint32_t voltageCalibration;
+    uint32_t gitVersion; 
+} __attribute__((__packed__));
+
+
 // Only the lowest 4 bits can be used!
 enum COMMAND: uint8_t
 {
-    ResetBadPacketCounter = 0,
+    ResetPacketCounters = 0,
     ReadVoltageAndStatus=1,
     Identify=2,
     ReadTemperature=3,
@@ -47,20 +59,22 @@ enum COMMAND: uint8_t
     Timing=8,
     ReadBalanceCurrentCounter=9,
     ReadPacketReceivedCounter=10,
-    ResetBalanceCurrentCounter=11
+    ResetBalanceCurrentCounter=11,
+    WriteBalanceLevel=12,
 };
 
 
 //Default values
 struct CellModuleConfig {
-  //uint8_t mybank;
-  uint8_t BypassTemperatureSetPoint;
-  uint16_t BypassThresholdmV;
+  //uint8_t mybank; // only known to the controller
+  uint16_t BypassTemperature;
+  uint16_t BypassThreshold;
 
   // Resistance of bypass load
-  //float LoadResistance;
+  //float LoadResistance;  // hardcoded
+
   //Voltage Calibration
-  float Calibration;
+  uint16_t Calibration;  // only stored
   //Reference voltage (millivolt) normally 2.00mV
   //float mVPerADC;
   //Internal Thermistor settings

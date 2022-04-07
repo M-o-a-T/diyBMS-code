@@ -26,28 +26,29 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 
 #include "packet_processor.h"
 
-//Enable this for debug/testing a single module will pretend to be an entire bank of 16 modules
-//you are likely to get OOS errors when these are running in a string as the timings will be wrong
-//#define FAKE_16_CELLS
-
 //Returns TRUE if the internal thermistor is hotter than the required setting (or over max limit)
 bool PacketProcessor::BypassOverheatCheck()
 {
-  int16_t temp = InternalTemperature();
-  return (temp > _config->BypassTemperatureSetPoint || temp > DIYBMS_MODULE_SafetyTemperatureCutoff);
-}
-
-// Returns an integer byte indicating the internal thermistor temperature in degrees C
-// uses basic B Coefficient Steinhart calculaton to give rough approximation in temperature
-int16_t PacketProcessor::InternalTemperature()
-{
-  return Steinhart::ThermistorToCelcius(INT_BCOEFFICIENT, raw_adc_onboard_temperature);
+  uint16_t temp = raw_adc_onboard_temperature;
+  if (temp > _config->BypassTemperature)
+    return true;
+  // safety, not overrideable
+  if (temp > DIYBMS_MODULE_SafetyTemperatureCutoff)
+    return true;
+  return false;
 }
 
 //Returns TRUE if the cell voltage is greater than the required setting
 bool PacketProcessor::BypassCheck()
 {
-  return (CellVoltage() > _config->BypassThresholdmV);
+  uint16_t temp = raw_adc_voltage;
+
+  if (bypassThreshold > 0 && temp > bypassThreshold)
+    return true;
+  if (temp > _config->BypassThreshold)
+    return true;
+
+  return false;
 }
 
 //Records an ADC reading after the interrupt has finished
@@ -56,8 +57,6 @@ void PacketProcessor::ADCReading(uint16_t value)
   switch (adcmode)
   {
   case ADC_CELL_VOLTAGE:
-  {
-
 #if (SAMPLEAVERAGING == 1)
     raw_adc_voltage = value;
 #else
@@ -82,15 +81,14 @@ void PacketProcessor::ADCReading(uint16_t value)
     // calculate the average, and overwrite the "raw" value
     //raw_adc_voltage = total / SAMPLEAVERAGING;
     
-    // JB: Keep Full total and divide later in float variables
+    // JB: Keep Full total
     raw_adc_voltage = total ;
 
 #endif
 
     break;
-  }
+
   case ADC_INTERNAL_TEMP:
-  {
 #if (defined(DIYBMSMODULEVERSION) && (DIYBMSMODULEVERSION == 420 && defined(SWAPR19R20)))
     //R19 and R20 swapped on V4.2 board, invert the thermistor reading
     //Reverted back to 1000 base value to fix issue https://github.com/stuartpittaway/diyBMSv4Code/issues/95
@@ -102,12 +100,10 @@ void PacketProcessor::ADCReading(uint16_t value)
     raw_adc_onboard_temperature = value;
 #endif
     break;
-  }
+
   case ADC_EXTERNAL_TEMP:
-  {
     raw_adc_external_temperature = value;
     break;
-  }
   }
 }
 
@@ -151,65 +147,6 @@ void PacketProcessor::TakeAnAnalogueReading(uint8_t mode)
   DiyBMSATTiny841::BeginADCReading();
 }
 
-//Run when a new packet is received over serial
-bool PacketProcessor::onPacketReceived(PacketStruct *receivebuffer)
-{
-  bool commandProcessed = false;
-  //Temporary debug counter, see where packets get lost
-  PacketReceivedCounter++;
-
-  {
-#if defined(FAKE_16_CELLS)
-    uint8_t start = receivebuffer->hops;
-    uint8_t end = start + 16;
-    for (size_t i = start; i < end; i++)
-    {
-#endif
-
-      //TODO: We can probably get rid of mymoduleaddress
-      mymoduleaddress = receivebuffer->hops;
-
-      bool isPacketForMe = receivebuffer->start_address <= mymoduleaddress && receivebuffer->end_address >= mymoduleaddress;
-
-      //Increment the hops even if the packet is not for us
-      receivebuffer->hops++;
-
-      commandProcessed = false;
-      //It's a good packet
-      if (isPacketForMe)
-      {
-        commandProcessed = processPacket(receivebuffer);
-
-        if (commandProcessed)
-        {
-          //Set flag to indicate we processed packet (other modules may also do this)
-          receivebuffer->command = receivebuffer->command | B10000000;
-        }
-      }
-#if defined(FAKE_16_CELLS)
-    }
-#endif
-    //Return false the packet was not for me (but still a valid packet)...
-    return commandProcessed;
-  }
-
-}
-
-//Read cell voltage and return millivolt reading (16 bit unsigned)
-uint16_t PacketProcessor::CellVoltage()
-{
-  //TODO: Get rid of the need for float variables?
-
-  // JB: Divide by number of samples here to get more precision from the averaging.
-  #if (SAMPLEAVERAGING >1)
-  float v = (((float)raw_adc_voltage/ (float)SAMPLEAVERAGING) * (float)MV_PER_ADC) * _config->Calibration;
-  #else
-  float v = ((float)raw_adc_voltage * (float)MV_PER_ADC) * _config->Calibration;
-  #endif
-  return (uint16_t)v;
-}
-
-
 
 // Process the request in the received packet
 //command byte
@@ -217,179 +154,206 @@ uint16_t PacketProcessor::CellVoltage()
 // X    = 1 bit indicate if packet processed
 // R    = 3 bits reserved not used
 // C    = 4 bits command (16 possible commands)
-bool PacketProcessor::processPacket(PacketStruct *buffer)
+void PacketProcessor::onHeaderReceived(PacketStruct *buffer)
 {
-  uint8_t moduledata_index = mymoduleaddress % maximum_cell_modules;
-  switch (buffer->command & 0x0F)
+
+  uint8_t addr = buffer->h.hops;
+  uint8_t more = 0;
+
+  buffer->h.hops += 1;
+
+  if(buffer->h.start > addr || buffer->h.start + buffer->h.cells < addr) {
+    // Not for us. Just forward.
+    serial->sendStartCopy(0);
+    return;
+  }
+
+  switch (buffer->h.command)
   {
-  case COMMAND::ResetBadPacketCounter:
-    badpackets = 0;
-    PacketReceivedCounter = 0;
-    return true;
+  case COMMAND::Timing:
+  case COMMAND::Identify:
+  case COMMAND::ResetBalanceCurrentCounter:
+  ok:
+    buffer->h.seen = 1;
+    // fall thru
+  default:
+    // do nothing. Just forward.
+  copy:
+    serial->sendStartCopy(more);
+    break;
+
+  case COMMAND::ReadBalancePowerPWM:
+    more = 1;
+    goto ok;
+
+  case COMMAND::ReadBadPacketCounter:
+  case COMMAND::ReadPacketReceivedCounter:
+    more = 2;
+    goto ok;
 
   case COMMAND::ReadVoltageAndStatus:
-    //Read voltage of VCC
-    //Maximum voltage 8191mV
-    buffer->moduledata[moduledata_index] = CellVoltage() & 0x1FFF;
+  case COMMAND::ReadBalanceCurrentCounter:
+    more = 4;
+    goto ok;
 
-    //3 top bits
-    //X = In bypass
-    //Y = Bypass over temperature
-    //Z = Not used
+  case COMMAND::ReadTemperature:
+    more = 3;
+    goto ok;
 
+  case COMMAND::ReadSettings:
+    more = sizeof(struct ReadConfigData);
+    goto ok;
+
+  case COMMAND::WriteSettings:
+    more = 6;
+  defer:
+    serial->sendDefer(more);
+    break;
+    
+  case COMMAND::WriteBalanceLevel:
+    more = 4;
+    goto defer;
+  }
+
+  return;
+}
+
+// here we have received our data, so assuming that we don't need to write
+// any, just start forwarding.
+//
+// Reminder: Processing the data may only be done in `processPacket`!
+void PacketProcessor::onReadReceived(PacketStruct *buffer)
+{
+  switch (buffer->h.command & 0x0F)
+  {
+  case COMMAND::WriteSettings:
+  case COMMAND::WriteBalanceLevel:
+    buffer->h.seen = 1;
+    // fall through
+  default:
+    serial->sendStartFrame(0);
+    break;
+  }
+}
+
+void PacketProcessor::onPacketReceived(PacketStruct *buffer)
+{
+  uint8_t addr = buffer->h.hops;
+  badpackets += ((buffer->h.sequence - lastSequence) & 0x07) - 1;
+  lastSequence = buffer->h.sequence;
+
+  if(buffer->h.start > addr || buffer->h.start + buffer->h.cells < addr) {
+    // Not for us. Done.
+    return;
+  }
+
+  uint16_t val;
+  switch (buffer->h.command)
+  {
+  case COMMAND::ReadVoltageAndStatus:
+    val = raw_adc_voltage;
     if (BypassOverheatCheck())
+      val |= 0x4000;
+    if (BypassOverheatCheck())
+      val |= 0x8000;
+    serial->sendBuffer(&val,sizeof(val));
+
+    val = bypassThreshold;
+  xmit2:
+    serial->sendBuffer(&val,sizeof(val));
+    break;
+
+  case COMMAND::ReadSettings:
     {
-      //Set bit
-      buffer->moduledata[moduledata_index] = buffer->moduledata[moduledata_index] | 0x4000;
+      struct ReadConfigData rcd;
+      rcd.boardVersion = DIYBMSMODULEVERSION;
+      rcd.bypassTemp = _config->BypassTemperature;
+      rcd.bypassThreshold = _config->BypassThreshold;
+      rcd.loadResistance = (uint8_t)(LOAD_RESISTANCE*16);
+      rcd.numSamples = SAMPLEAVERAGING;
+      rcd.voltageCalibration = _config->Calibration;
+      rcd.gitVersion = GIT_VERSION_B;
+
+      serial->sendBuffer(&rcd,sizeof(rcd));
+      break;
     }
 
-    if (IsBypassActive())
+  case COMMAND::ReadTemperature:
     {
-      //Set bit
-      buffer->moduledata[moduledata_index] = buffer->moduledata[moduledata_index] | 0x8000;
+      uint16_t val1 = raw_adc_onboard_temperature;
+      uint16_t val2 = raw_adc_external_temperature;
+      serial->sendByte(val1 >> 4);
+      serial->sendByte((val1 << 4) | (val2 >> 8));
+      serial->sendByte(val2);
+      break;
     }
 
-    return true;
+  case COMMAND::ReadBalancePowerPWM:
+    serial->sendByte(WeAreInBypass ? PWMSetPoint : 0);
+    break;
 
-  case COMMAND::Timing:
-    //Do nothing just accept and pass on the packet
-    return true;
+  case COMMAND::ReadBadPacketCounter:
+    val = badpackets;
+    goto xmit2;
+
+  case COMMAND::ReadBalanceCurrentCounter:
+    {
+      uint32_t val3 = MilliAmpHourBalanceCounter;
+      serial->sendBuffer(&val3, sizeof(val3));
+      break;
+    }
+
+  case COMMAND::ReadPacketReceivedCounter:
+    val = PacketReceivedCounter;
+    goto xmit2;
+
+  case COMMAND::ResetPacketCounters:
+    badpackets = 0;
+    PacketReceivedCounter = 0;
+    break;
 
   case COMMAND::Identify:
     //identify module
     //For the next 10 received packets - keep the LEDs lit up
     identifyModule = 10;
-    return true;
-
-  case COMMAND::ReadTemperature:
-    //Return the last known temperature values recorded by the ADC (both internal and external)
-    buffer->moduledata[moduledata_index] = TemperatureMeasurement();
-    return true;
-
-  case COMMAND::ReadBalancePowerPWM:
-    //Read the last PWM value
-    //Use WeAreInBypass instead of IsByPassActive() as the later also includes the "settle" time
-    buffer->moduledata[moduledata_index] = WeAreInBypass ? PWMSetPoint : 0;
-    return true;
-
-  case COMMAND::ReadBadPacketCounter:
-    //Report number of bad packets
-    buffer->moduledata[moduledata_index] = badpackets;
-    return true;
-
-  case COMMAND::ReadSettings:
-    {
-        //Report settings/configuration, fills whole moduledata buffer up
-
-        FLOATUNION_t myFloat;
-        myFloat.number = (float)LOAD_RESISTANCE;
-        buffer->moduledata[0] = myFloat.word[0];
-        buffer->moduledata[1] = myFloat.word[1];
-
-        myFloat.number = _config->Calibration;
-        buffer->moduledata[2] = myFloat.word[0];
-        buffer->moduledata[3] = myFloat.word[1];
-
-        myFloat.number = (float)MV_PER_ADC;
-        buffer->moduledata[4] = myFloat.word[0];
-        buffer->moduledata[5] = myFloat.word[1];
-
-        buffer->moduledata[6] = _config->BypassTemperatureSetPoint;
-        buffer->moduledata[7] = _config->BypassThresholdmV;
-        buffer->moduledata[8] = INT_BCOEFFICIENT;
-        buffer->moduledata[9] = EXT_BCOEFFICIENT;
-        buffer->moduledata[10] = DIYBMSMODULEVERSION;
-
-        //Version of firmware (taken automatically from GIT)
-        buffer->moduledata[14] = GIT_VERSION_B1;
-        buffer->moduledata[15] = GIT_VERSION_B2;
-        return true;
-    }
+    break;
 
   case COMMAND::WriteSettings:
-  {
-    FLOATUNION_t myFloat;
+    
+    val = buffer->data[0];
+    if(val)
+      _config->Calibration = val;
 
-    myFloat.word[0] = buffer->moduledata[0];
-    myFloat.word[1] = buffer->moduledata[1];
-    //if (myFloat.number < 0xFFFF)
-    //{
-    //      _config->LoadResistance = myFloat.number;
-    //}
-
-    myFloat.word[0] = buffer->moduledata[2];
-    myFloat.word[1] = buffer->moduledata[3];
-    if (myFloat.number < 0xFFFF)
-    {
-      _config->Calibration = myFloat.number;
-    }
-
-    //myFloat.word[0] = buffer.moduledata[4];
-    //myFloat.word[1] = buffer.moduledata[5];
-    //if (myFloat.number < 0xFFFF)
-    //{
-    //  _config->mVPerADC = (float)MV_PER_ADC;
-    //}
-
-    if (buffer->moduledata[6] != 0xFF)
-    {
-      _config->BypassTemperatureSetPoint = buffer->moduledata[6];
-
+    val = buffer->data[1];
+    if(val) {
 #if defined(DIYBMSMODULEVERSION) && (DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20))
       //Keep temperature low for modules with R19 and R20 not swapped
-      if (_config->BypassTemperatureSetPoint > 45)
-      {
-        _config->BypassTemperatureSetPoint = 45;
-      }
+      if (val > 715) // see main.cpp
+        val = 715;
 #endif
+      _config->BypassTemperature = val;
     }
 
-    if (buffer->moduledata[7] != 0xFFFF)
-    {
-      _config->BypassThresholdmV = buffer->moduledata[7];
-    }
-    //if (buffer.moduledata[8] != 0xFFFF)
-    //{
-    //      _config->Internal_BCoefficient = buffer.moduledata[8];
-    //}
-
-    //if (buffer.moduledata[9] != 0xFFFF)
-    //{
-    //      _config->External_BCoefficient = buffer.moduledata[9];
-    //}
+    val = buffer->data[2];
+    if (val)
+      _config->BypassThreshold = val;
 
     //Save settings
     Settings::WriteConfigToEEPROM((uint8_t *)_config, sizeof(CellModuleConfig), EEPROM_CONFIG_ADDRESS);
 
     SettingsHaveChanged = true;
 
-    return true;
-  }
-
-  case COMMAND::ReadBalanceCurrentCounter:
-  {
-    buffer->moduledata[moduledata_index] = (uint16_t)MilliAmpHourBalanceCounter;
-    return true;
-  }
-
-  case COMMAND::ReadPacketReceivedCounter:
-  {
-    buffer->moduledata[moduledata_index] = PacketReceivedCounter;
-    return true;
-  }
+    break;
 
   case COMMAND::ResetBalanceCurrentCounter:
-  {
     MilliAmpHourBalanceCounter = 0;
-    return true;
-  }
+    break;
+
+  case COMMAND::WriteBalanceLevel:
+    bypassThreshold = buffer->data[0];
+    break;
   }
 
-  return false;
+  return;
 }
 
-uint16_t PacketProcessor::TemperatureMeasurement()
-{
-  return (Steinhart::TemperatureToByte(Steinhart::ThermistorToCelcius(INT_BCOEFFICIENT, raw_adc_onboard_temperature)) << 8) +
-         Steinhart::TemperatureToByte(Steinhart::ThermistorToCelcius(EXT_BCOEFFICIENT, raw_adc_external_temperature));
-}
