@@ -7,7 +7,6 @@
 #include "Steinhart.h"
 #include "defines.h"
 #include "settings.h"
-#include "crc16.h"
 
 #define ADC_CELL_VOLTAGE 0
 #define ADC_INTERNAL_TEMP 1
@@ -31,7 +30,6 @@ struct PacketStruct
   uint8_t hops;
   uint16_t sequence;
   uint16_t moduledata[maximum_cell_modules];
-  uint16_t crc;
 } __attribute__((packed));
 
 typedef union
@@ -94,6 +92,8 @@ public:
   {
     return WeAreInBypass || bypassHasJustFinished > 0;
   }
+
+  uint8_t writeBufferSize = 0;
 
 private:
   CellModuleConfig *_config;

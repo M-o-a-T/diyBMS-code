@@ -59,13 +59,13 @@ https://trolsoft.ru/en/uart-calc
 #include "settings.h"
 #include <FastPID.h>
 
-#include <SerialEncoder.h>
+#include <SerialPacker.h>
 #include "diybms_attiny841.h"
 #include "packet_processor.h"
 
 uint8_t SerialPacketReceiveBuffer[8 + sizeof(PacketStruct)];
 
-SerialEncoder myPacketSerial;
+SerialPacker myPacketSerial;
 
 //Default values which get overwritten by EEPROM on power up
 CellModuleConfig myConfig;
@@ -140,8 +140,8 @@ void onPacketReceived()
     DiyBMSATTiny841::NotificationLedOn();
   }
 
-  //Send the packet (fixed length!) (even if it was invalid so controller can count crc errors)
-  myPacketSerial.sendBuffer(SerialPacketReceiveBuffer);
+  //Send the packet (fixed length!)
+  myPacketSerial.sendBuffer(SerialPacketReceiveBuffer, sizeof(PacketStruct));
 
   //PLATFORM ATTINYCORE version is 1.3.2 which is old, and SERIAL.FLUSH simply clears the buffer (bad)
   //Therefore we use 1.4.1 which has the correct code to wait until the buffer is empty.
@@ -154,7 +154,8 @@ void onPacketReceived()
 
 ISR(USART0_START_vect)
 {
-  //Needs to be here!
+  //This interrupt exists just to wake up the CPU so that it can read
+  //voltage+temperature while the packet arrives
   asm("NOP");
 }
 
@@ -220,9 +221,11 @@ void setup()
   DiyBMSATTiny841::ConfigurePorts();
 
   //More power saving changes
-  DiyBMSATTiny841::EnableSerial0();
-
   DiyBMSATTiny841::DisableSerial1();
+
+  // Start talking
+  DiyBMSATTiny841::EnableSerial0();
+  PP.writeBufferSize = Serial.availableForWrite();
 
   //Check if setup routine needs to be run
   if (!Settings::ReadConfigFromEEPROM((uint8_t *)&myConfig, sizeof(myConfig), EEPROM_CONFIG_ADDRESS))
@@ -248,7 +251,7 @@ void setup()
   //Set up data handler
   Serial.begin(BAUD, SERIAL_8N1);
 
-  myPacketSerial.begin(&Serial, &onPacketReceived, sizeof(PacketStruct), SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer));
+  myPacketSerial.begin(&Serial, nullptr, &onPacketReceived, SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer));
 }
 
 ISR(TIMER1_COMPA_vect)
@@ -340,7 +343,8 @@ void loop()
     StopBalance();
   }
 
-  if (!PP.WeAreInBypass && PP.bypassHasJustFinished == 0 && Serial.available() == 0)
+  noInterrupts();
+  if (!PP.WeAreInBypass && PP.bypassHasJustFinished == 0 && Serial.available() == 0 && Serial.availableForWrite() == PP.writeBufferSize && DiyBMSATTiny841::CheckSerialIdle())
   {
     //Go to SLEEP, we are not in bypass anymore and no serial data waiting...
 
@@ -356,7 +360,6 @@ void loop()
     //Program stops here until woken by watchdog or Serial port ISR
     DiyBMSATTiny841::Sleep();
   }
-
   //We are awake....
 
   if (wdt_triggered)
@@ -372,6 +375,7 @@ void loop()
     //If we have just woken up, we shouldn't be in balance safety check that we are not
     StopBalance();
   }
+  interrupts();
 
   //We always take a voltage and temperature reading on every loop cycle to check if we need to go into bypass
   //this is also triggered by the watchdog should comms fail or the module is running standalone
@@ -408,28 +412,7 @@ void loop()
   //Switch reference off if we are not in bypass (otherwise leave on)
   DiyBMSATTiny841::ReferenceVoltageOff();
 
-  if (wdt_triggered && Serial.available() == 0)
-  {
-    //If the WDT trigered, and NO serial is available, don't do anything here
-    //this avoids waiting 200ms for data that is never going to arrive.
-  }
-  else
-  {
-    //Loop here processing any packets then go back to sleep
-
-    //NOTE this loop size is dependant on the size of the packet buffer (40 bytes)
-    //     too small a loop will prevent anything being processed as we go back to Sleep
-    //     before packet is received correctly
-    //PacketProcessed = false;
-    for (size_t i = 0; i < 200; i++)
-    {
-      // Call update to receive, decode and process incoming packets.
-      myPacketSerial.checkInputStream();
-
-      //Allow data to be received in buffer (delay must be AFTER) checkInputStream and before DisableSerial0TX
-      delay(1);
-    }
-  }
+  myPacketSerial.checkInputStream();
 
   //We should probably check for invalid InternalTemperature ranges here and throw error (shorted or unconnecter thermistor for example)
   int16_t internal_temperature = PP.InternalTemperature();

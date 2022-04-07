@@ -17,10 +17,6 @@ bool PacketReceiveProcessor::ProcessReply(PacketStruct *receivebuffer)
   // Copy to our buffer (probably don't need to do this), just use pointer instead
   memcpy(&_packetbuffer, receivebuffer, sizeof(_packetbuffer));
 
-  // Calculate the CRC and compare to received
-  uint16_t validateCRC = CRC16::CalculateArray((uint8_t *)&_packetbuffer, sizeof(_packetbuffer) - 2);
-
-  if (validateCRC == _packetbuffer.crc)
   {
     //Its a valid packet...
     packetLastReceivedMillisecond = millis();
@@ -123,14 +119,6 @@ bool PacketReceiveProcessor::ProcessReply(PacketStruct *receivebuffer)
       totalNotProcessedErrors++;
       ESP_LOGD(TAG, "Modules ignored request");
     }
-  }
-  else
-  {
-    //crc error
-    totalCRCErrors++;
-#if defined(PACKET_LOGGING_RECEIVE)
-    SERIAL_DEBUG.println(F("*CRC Error*"));
-#endif
   }
 
   return false;

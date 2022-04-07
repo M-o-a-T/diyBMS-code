@@ -158,12 +158,7 @@ bool PacketProcessor::onPacketReceived(PacketStruct *receivebuffer)
   //Temporary debug counter, see where packets get lost
   PacketReceivedCounter++;
 
-  //Calculate the CRC and compare to received
-  uint16_t validateCRC = CRC16::CalculateArray((unsigned char *)receivebuffer, sizeof(PacketStruct) - 2);
-
-  if (validateCRC == receivebuffer->crc)
   {
-
 #if defined(FAKE_16_CELLS)
     uint8_t start = receivebuffer->hops;
     uint8_t end = start + 16;
@@ -176,7 +171,7 @@ bool PacketProcessor::onPacketReceived(PacketStruct *receivebuffer)
 
       bool isPacketForMe = receivebuffer->start_address <= mymoduleaddress && receivebuffer->end_address >= mymoduleaddress;
 
-      //Increment the hops no matter what (on valid CRC)
+      //Increment the hops even if the packet is not for us
       receivebuffer->hops++;
 
       commandProcessed = false;
@@ -194,16 +189,10 @@ bool PacketProcessor::onPacketReceived(PacketStruct *receivebuffer)
 #if defined(FAKE_16_CELLS)
     }
 #endif
-    //Calculate new checksum over whole buffer (as hops as increased)
-    receivebuffer->crc = CRC16::CalculateArray((unsigned char *)receivebuffer, sizeof(PacketStruct) - 2);
-
     //Return false the packet was not for me (but still a valid packet)...
     return commandProcessed;
   }
 
-  //The packet received was not correct, failed CRC check
-  badpackets++;
-  return false;
 }
 
 //Read cell voltage and return millivolt reading (16 bit unsigned)

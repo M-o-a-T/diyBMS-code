@@ -20,7 +20,6 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 */
 
 #include <Preferences.h>
-#include "crc16.h"
 
 class Settings
 {

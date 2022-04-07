@@ -1,4 +1,5 @@
 #include "settings.h"
+#include "crc16.h"
 
 void Settings::WriteConfig(const char *tag, char *settings, int size)
 {
@@ -10,7 +11,7 @@ void Settings::WriteConfig(const char *tag, char *settings, int size)
   prefs.putBytes("bytes", settings, size);
 
   //Generate and save the checksum for the setting data block
-  prefs.putUShort("checksum", CRC16::CalculateArray((uint8_t *)settings, size));
+  prefs.putUShort("checksum", CRC16_Buffer((uint8_t *)settings, size));
 
   prefs.end();
 }
@@ -32,7 +33,7 @@ bool Settings::ReadConfig(const char *tag, char *settings, int size)
     prefs.getBytes("bytes", settings, schLen);
 
     // Calculate the checksum
-    uint16_t checksum = CRC16::CalculateArray((uint8_t *)settings, size);
+    uint16_t checksum = CRC16_Buffer((uint8_t *)settings, size);
     uint16_t existingChecksum = prefs.getUShort("checksum");
     prefs.end();
 

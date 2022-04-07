@@ -196,7 +196,6 @@ struct PacketStruct
   uint8_t hops;
   uint16_t sequence;
   uint16_t moduledata[maximum_cell_modules_per_packet];
-  uint16_t crc;
 } __attribute__((packed));
 
 struct CellModuleInfo

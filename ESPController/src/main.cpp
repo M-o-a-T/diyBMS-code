@@ -51,7 +51,7 @@ static const char *TAG = "diybms";
 #include <ESPAsyncWebServer.h>
 #include <AsyncMqttClient.h>
 
-#include <SerialEncoder.h>
+#include <SerialPacker.h>
 #include <cppQueue.h>
 
 #include <ArduinoJson.h>
@@ -137,7 +137,6 @@ avrprogramsettings _avrsettings;
 
 QueueHandle_t rs485_transmit_q_handle;
 
-#include "crc16.h"
 #include "settings.h"
 #include "SoftAP.h"
 #include "DIYBMSServer.h"
@@ -155,7 +154,7 @@ PacketReceiveProcessor receiveProc = PacketReceiveProcessor();
 // Memory to hold in and out serial buffer
 uint8_t SerialPacketReceiveBuffer[2 * sizeof(PacketStruct)];
 
-SerialEncoder myPacketSerial;
+SerialPacker myPacketSerial;
 
 uint16_t sequence = 0;
 
@@ -907,14 +906,13 @@ void dumpPacketToDebug(char indicator, PacketStruct *buffer)
   // Filter on some commands
   // if ((buffer->command & 0x0F) != COMMAND::Timing)    return;
 
-  ESP_LOGD(TAG, "%c %02X-%02X H:%02X C:%02X SEQ:%04X CRC:%04X %s",
+  ESP_LOGD(TAG, "%c %02X-%02X H:%02X C:%02X SEQ:%04X %s",
            indicator,
            buffer->start_address,
            buffer->end_address,
            buffer->hops,
            buffer->command,
            buffer->sequence,
-           buffer->crc,
            packetType(buffer->command & 0x0F));
 
   // ESP_LOG_BUFFER_HEX("packet", &(buffer->moduledata[0]), sizeof(buffer->moduledata), ESP_LOG_DEBUG);
@@ -1030,8 +1028,6 @@ void onPacketReceived()
     uint32_t t = millis();
     ps.moduledata[2] = (t & 0xFFFF0000) >> 16;
     ps.moduledata[3] = t & 0x0000FFFF;
-    // Ensure CRC is correct
-    ps.crc = CRC16::CalculateArray((uint8_t *)&ps, sizeof(PacketStruct) - 2);
   }
 
   if (!replyQueue.push(&ps))
@@ -1079,8 +1075,7 @@ void transmit_task(void *param)
         transmitBuffer.moduledata[1] = t & 0x0000FFFF;
       }
 
-      transmitBuffer.crc = CRC16::CalculateArray((uint8_t *)&transmitBuffer, sizeof(PacketStruct) - 2);
-      myPacketSerial.sendBuffer((byte *)&transmitBuffer);
+      myPacketSerial.sendBuffer((byte *)&transmitBuffer,sizeof(PacketStruct));
 
       // Output the packet we just transmitted to debug console
       //#if defined(PACKET_LOGGING_SEND)
@@ -1663,15 +1658,6 @@ uint16_t calculateCRC(const uint8_t *frame, uint8_t bufferSize)
   }
 
   return temp;
-  /*
-  // Reverse byte order.
-  uint16_t temp2 = temp >> 8;
-  temp = (temp << 8) | temp2;
-  temp &= 0xFFFF;
-  // the returned value is already swapped
-  // crcLo byte is first & crcHi byte is last
-  return temp;
-  */
 }
 
 uint8_t SetMobusRegistersFromFloat(uint8_t *cmd, uint8_t ptr, float value)
@@ -2229,12 +2215,10 @@ void service_rs485_transmit_q(void *param)
         packet_length = 9 + cmd[6];
       }
 
-      // Calculate the MODBUS CRC
+      // Calculate the MODBUS CRC. Yes, it is byteswapped.
       uint16_t temp = calculateCRC(cmd, packet_length - 2);
-      // Byte swap the Hi and Lo bytes
-      uint16_t crc16 = (temp << 8) | (temp >> 8);
-      cmd[packet_length - 2] = crc16 >> 8; // split crc into 2 bytes
-      cmd[packet_length - 1] = crc16 & 0xFF;
+      cmd[packet_length - 2] = temp & 0xFF;
+      cmd[packet_length - 1] = temp >> 8;
 
       // Send the bytes (actually just put them into the TX FIFO buffer)
       uart_write_bytes(rs485_uart_num, (char *)cmd, packet_length);
@@ -2283,17 +2267,14 @@ void rs485_rx(void *param)
     {
       uint8_t id = frame[0];
 
-      uint16_t crc = ((frame[len - 2] << 8) | frame[len - 1]); // combine the crc Low & High bytes
-
-      uint16_t temp = calculateCRC(frame, len - 2);
-      // Swap bytes to match MODBUS ordering
-      uint16_t calculatedCRC = (temp << 8) | (temp >> 8);
+      uint16_t crc = ((frame[len - 1] << 8) | frame[len - 2]); // combine the crc Low & High bytes.
+      // Yes, this is byte swapped.
 
       // ESP_LOG_BUFFER_HEXDUMP(TAG, frame, len, esp_log_level_t::ESP_LOG_DEBUG);
 
-      if (calculatedCRC == crc)
+      if (calculateCRC(frame, len - 2) == crc)
       {
-        // if the calculated crc matches the recieved crc continue to process data...
+        // if the calculated crc matches the received crc continue to process data...
         uint8_t RS485Error = frame[1] & B10000000;
         if (RS485Error == 0)
         {
@@ -3165,7 +3146,7 @@ void setup()
   // Receive is IO2 which means the RX1 plug must be disconnected for programming to work!
   SERIAL_DATA.begin(mysettings.baudRate, SERIAL_8N1, 2, 32); // Serial for comms to modules
 
-  myPacketSerial.begin(&SERIAL_DATA, &onPacketReceived, sizeof(PacketStruct), SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer));
+  myPacketSerial.begin(&SERIAL_DATA, nullptr, &onPacketReceived, SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer));
 
   SetupRS485();
 
