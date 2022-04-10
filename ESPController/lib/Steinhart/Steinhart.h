@@ -5,8 +5,7 @@
 
 class Steinhart {
    public:
-      static int16_t ThermistorToCelcius(uint16_t BCOEFFICIENT, uint16_t RawADC);
-      static uint8_t TemperatureToByte(int16_t TempInCelcius);
-
+      static int16_t ThermistorToCelsius(uint16_t BCOEFFICIENT, uint16_t RawADC);
+      static uint16_t CelsiusToThermistor(uint16_t BCOEFFICIENT, int16_t TempInCelcius);
 };
 #endif

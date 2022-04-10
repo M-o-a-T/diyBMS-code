@@ -1,4 +1,5 @@
 #include "victron_canbus.h"
+#include "DIYBMSServer.h"
 /*
  ____  ____  _  _  ____  __  __  ___
 (  _ \(_  _)( \/ )(  _ \(  \/  )/ __)

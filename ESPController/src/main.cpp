@@ -39,6 +39,7 @@ static const char *TAG = "diybms";
 #include <esp_wifi.h>
 #include <esp_bt.h>
 #include <Preferences.h>
+#include <malloc.h>
 
 // Libraries for SD card
 #include "SD.h"
@@ -145,14 +146,14 @@ QueueHandle_t rs485_transmit_q_handle;
 
 // Instantiate queue to hold packets ready for transmission
 // TODO: Move to RTOS queues instead
-cppQueue requestQueue(sizeof(PacketStruct), 30, FIFO);
-cppQueue replyQueue(sizeof(PacketStruct), 4, FIFO);
+cppQueue requestQueue(sizeof(PacketMeta *), 30, FIFO);
+cppQueue replyQueue(sizeof(PacketMeta *), 4, FIFO);
 
 PacketRequestGenerator prg = PacketRequestGenerator(&requestQueue);
 PacketReceiveProcessor receiveProc = PacketReceiveProcessor();
 
-// Memory to hold in and out serial buffer
-uint8_t SerialPacketReceiveBuffer[2 * sizeof(PacketStruct)];
+// Memory to hold one serial buffer
+uint8_t SerialPacketReceiveBuffer[sizeof(struct PacketHeader)+sizeof(union PacketResponseAny)*maximum_cell_modules_per_packet];
 
 SerialPacker myPacketSerial;
 
@@ -167,7 +168,18 @@ void LED(uint8_t bits)
   hal.Led(bits);
 }
 
-// When triggered, the VOLTAGE and STATUS in the CellModuleInfo structure are accurate and consistant at this point in time.
+PacketMeta *allocatePacket(uint16_t size)
+{
+  PacketMeta *meta = (PacketMeta *)calloc(1, sizeof(struct PacketMeta)+sizeof(struct PacketHeader)+size);
+  meta->dataLen = size;
+  return meta;
+}
+void freePacket(PacketMeta *packet)
+{ 
+  free(packet);
+}
+
+// When triggered, the VOLTAGE and STATUS in the CellModuleInfo structure are accurate and consistent at this point in time.
 // Good point to apply rules and update screen/statistics
 void voltageandstatussnapshot_task(void *param)
 {
@@ -863,8 +875,8 @@ const char *packetType(uint8_t cmd)
 {
   switch (cmd)
   {
-  case COMMAND::ResetBadPacketCounter:
-    return "ResetC";
+  case COMMAND::ResetPacketCounters:
+    return "ResetPkCC";
     break;
   case COMMAND::ReadVoltageAndStatus:
     return "RdVolt";
@@ -875,8 +887,8 @@ const char *packetType(uint8_t cmd)
   case COMMAND::ReadTemperature:
     return "RdTemp";
     break;
-  case COMMAND::ReadBadPacketCounter:
-    return "RdBadPkC";
+  case COMMAND::ReadPacketCounters:
+    return "RdPkC";
     break;
   case COMMAND::ReadSettings:
     return "RdSettin";
@@ -893,27 +905,28 @@ const char *packetType(uint8_t cmd)
   case COMMAND::ReadBalanceCurrentCounter:
     return "Current";
     break;
-  case COMMAND::ReadPacketReceivedCounter:
-    return "PktRvd";
+  case COMMAND::WriteBalanceLevel:
+    return "WriteBal";
     break;
   }
 
   return " ??????   ";
 }
 
-void dumpPacketToDebug(char indicator, PacketStruct *buffer)
+void dumpPacketToDebug(char indicator, PacketMeta *meta)
 {
   // Filter on some commands
   // if ((buffer->command & 0x0F) != COMMAND::Timing)    return;
 
-  ESP_LOGD(TAG, "%c %02X-%02X H:%02X C:%02X SEQ:%04X %s",
+  PacketHeader *header = (PacketHeader *)(meta+1);
+  ESP_LOGD(TAG, "%c %02X-%02X H:%02X C:%02X SEQ:%01X %s",
            indicator,
-           buffer->start_address,
-           buffer->end_address,
-           buffer->hops,
-           buffer->command,
-           buffer->sequence,
-           packetType(buffer->command & 0x0F));
+           header->start,
+           header->start+header->cells,
+           header->hops,
+           header->command,
+           header->sequence,
+           packetType(header->command));
 
   // ESP_LOG_BUFFER_HEX("packet", &(buffer->moduledata[0]), sizeof(buffer->moduledata), ESP_LOG_DEBUG);
 }
@@ -988,11 +1001,11 @@ void replyqueue_task(void *param)
   for (;;)
   {
     // Delay 1 second
-    vTaskDelay(pdMS_TO_TICKS(500));
+    vTaskDelay(pdMS_TO_TICKS(100));
 
     while (!replyQueue.isEmpty())
     {
-      PacketStruct ps;
+      PacketMeta *ps;
       replyQueue.pop(&ps);
 
 #if defined(PACKET_LOGGING_RECEIVE)
@@ -1000,7 +1013,7 @@ void replyqueue_task(void *param)
 // dumpPacketToDebug('R', &ps);
 #endif
 
-      if (!receiveProc.ProcessReply(&ps))
+      if (!receiveProc.ProcessReply(ps))
       {
         // Error blue
         LED(RGBLED::Blue);
@@ -1017,71 +1030,92 @@ void replyqueue_task(void *param)
   }
 }
 
+void onPacketHeader()
+{
+  // a CRC error is a packet where onPacketReceived is not called
+  receiveProc.pendingCRCErrors += 1;
+}
+
 void onPacketReceived()
 {
-  PacketStruct ps;
-  memcpy(&ps, SerialPacketReceiveBuffer, sizeof(PacketStruct));
+  // let's just count hacked-up packets as error
+  receiveProc.totalCRCErrors += receiveProc.pendingCRCErrors-1;
+  receiveProc.pendingCRCErrors = 0;
 
-  if ((ps.command & 0x0F) == COMMAND::Timing)
-  {
-    // Timestamp at the earliest possible moment
-    uint32_t t = millis();
-    ps.moduledata[2] = (t & 0xFFFF0000) >> 16;
-    ps.moduledata[3] = t & 0x0000FFFF;
+  if(myPacketSerial.receiveCount() < sizeof(struct PacketHeader)) {
+    receiveProc.totalNotProcessedErrors += 1;
+    return;
   }
+
+  PacketMeta *ps = (PacketMeta *)calloc(1,sizeof(PacketMeta)+myPacketSerial.receiveCount());
+
+  ps->dataLen = myPacketSerial.receiveCount();
+  ps->timestamp = millis();
+  memcpy(ps+1, SerialPacketReceiveBuffer, ps->dataLen);
 
   if (!replyQueue.push(&ps))
   {
     ESP_LOGE(TAG, "Reply Q full");
+    receiveProc.totalNotProcessedErrors += 1; // TODO?
+    free(ps);
   }
-  // ESP_LOGI(TAG,"Reply Q length %i",replyQueue.getCount());
 }
 
 void transmit_task(void *param)
 {
+  uint16_t delay_wait;
+
+  if (mysettings.baudRate >= 9600)
+    delay_wait = 50;
+  else if (mysettings.baudRate >= 5000)
+    delay_wait = 70;
+  else
+    delay_wait = 100;
+
   for (;;)
   {
-    // Delay based on comms speed, ensure the first module has time to process and clear the request
-    // before sending another packet
-    uint16_t delay_ms = 900;
-
-    if (mysettings.baudRate == 9600)
-    {
-      delay_ms = 450;
-    }
-    else if (mysettings.baudRate == 5000)
-    {
-      delay_ms = 700;
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(delay_ms));
     // TODO: Move to proper RTOS QUEUE...
-    if (requestQueue.isEmpty() == false)
-    {
-      // Called to transmit the next packet in the queue need to ensure this procedure
-      // is called more frequently than items are added into the queue
+    while(requestQueue.isEmpty())
+      vTaskDelay(pdMS_TO_TICKS(delay_wait));
 
-      PacketStruct transmitBuffer;
+    PacketMeta *meta;
+    requestQueue.pop(&meta);
+    PacketHeader *header = (PacketHeader *)(meta+1);
 
-      requestQueue.pop(&transmitBuffer);
-      sequence++;
-      transmitBuffer.sequence = sequence;
+    sequence++;
+    header->sequence = sequence;
 
-      if (transmitBuffer.command == COMMAND::Timing)
-      {
-        // Timestamp at the last possible moment
-        uint32_t t = millis();
-        transmitBuffer.moduledata[0] = (t & 0xFFFF0000) >> 16;
-        transmitBuffer.moduledata[1] = t & 0x0000FFFF;
-      }
+    uint32_t t = millis();
+    uint16_t len = sizeof(PacketHeader)+meta->dataLen;
+    if (header->command == COMMAND::Timing)
+      len += sizeof(t);
 
-      myPacketSerial.sendBuffer((byte *)&transmitBuffer,sizeof(PacketStruct));
+    // delay so modules can add data without getting overrun by the next
+    // packet.
+    // Serial overhead: start(1) + len (1/2) plus CRC (2), plus some time
+    // for slack, so let's use 8.
+    // A byte takes 10 bits if no parity and one stop bit, but maybe a
+    // module interrupt delays sending and/or somebody decides to turn on
+    // parity.
+    uint16_t delay_ms = ((8+len + (uint32_t)meta->dataExpect * (header->cells+1)) * 12) / mysettings.baudRate;
 
-      // Output the packet we just transmitted to debug console
-      //#if defined(PACKET_LOGGING_SEND)
-      //      dumpPacketToDebug('S', &transmitBuffer);
-      //#endif
-    }
+    myPacketSerial.sendStartFrame(len);
+    myPacketSerial.sendBuffer(&header, sizeof(PacketHeader)+meta->dataLen);
+
+    // Add the timestamp
+    if (header->command == COMMAND::Timing)
+      myPacketSerial.sendBuffer(&t,sizeof(t));
+
+    myPacketSerial.sendEndFrame();
+
+    // Output the packet we just transmitted to debug console
+    //#if defined(PACKET_LOGGING_SEND)
+    //      dumpPacketToDebug('S', &transmitBuffer);
+    //#endif
+    
+    // Subtract the time taken so far, as we don't know how much the RTOS
+    // buffers for us
+    vTaskDelay(pdMS_TO_TICKS(delay_ms - (millis()-t)));
   }
 }
 
@@ -1133,14 +1167,14 @@ void ProcessRules()
       if (cmi[cellid].valid && cmi[cellid].settingsCached)
       {
 
-        if (cmi[cellid].BypassThresholdmV != mysettings.BypassThresholdmV)
+        if (cmi[cellid].BypassConfigThresholdmV != mysettings.BypassThresholdmV)
         {
-          rules.SetWarning(InternalWarningCode::ModuleInconsistantBypassVoltage);
+          rules.SetWarning(InternalWarningCode::ModuleInconsistentBypassVoltage);
         }
 
-        if (cmi[cellid].BypassOverTempShutdown != mysettings.BypassOverTempShutdown)
+        if (cmi[cellid].BypassMaxTemp != mysettings.BypassMaxTemp)
         {
-          rules.SetWarning(InternalWarningCode::ModuleInconsistantBypassTemperature);
+          rules.SetWarning(InternalWarningCode::ModuleInconsistentBypassTemperature);
         }
 
         if (cmi[cellid].inBypass)
@@ -1151,13 +1185,13 @@ void ProcessRules()
         if (cmi[0].settingsCached && cmi[cellid].CodeVersionNumber != cmi[0].CodeVersionNumber)
         {
           // Do all the modules have the same version of code as module zero?
-          rules.SetWarning(InternalWarningCode::ModuleInconsistantCodeVersion);
+          rules.SetWarning(InternalWarningCode::ModuleInconsistentCodeVersion);
         }
 
         if (cmi[0].settingsCached && cmi[cellid].BoardVersionNumber != cmi[0].BoardVersionNumber)
         {
           // Do all the modules have the same hardware revision?
-          rules.SetWarning(InternalWarningCode::ModuleInconsistantBoardRevision);
+          rules.SetWarning(InternalWarningCode::ModuleInconsistentBoardRevision);
         }
       }
 
@@ -1660,19 +1694,21 @@ uint16_t calculateCRC(const uint8_t *frame, uint8_t bufferSize)
   return temp;
 }
 
-uint8_t SetMobusRegistersFromFloat(uint8_t *cmd, uint8_t ptr, float value)
+typedef union
+{
+  float value;
+  uint16_t word[2];
+} FloatUnionType;
+
+uint8_t SetModbusRegistersFromFloat(uint8_t *cmd, uint8_t ptr, float value)
 {
   FloatUnionType fut;
   fut.value = value;
   // 4 bytes
-  cmd[ptr] = (uint8_t)(fut.word[0] >> 8);
-  ptr++;
-  cmd[ptr] = (uint8_t)(fut.word[0] & 0xFF);
-  ptr++;
-  cmd[ptr] = (uint8_t)(fut.word[1] >> 8);
-  ptr++;
-  cmd[ptr] = (uint8_t)(fut.word[1] & 0xFF);
-  ptr++;
+  cmd[ptr++] = (uint8_t)(fut.word[0] >> 8);
+  cmd[ptr++] = (uint8_t)(fut.word[0] & 0xFF);
+  cmd[ptr++] = (uint8_t)(fut.word[1] >> 8);
+  cmd[ptr++] = (uint8_t)(fut.word[1] & 0xFF);
 
   return ptr;
 }
@@ -1792,8 +1828,8 @@ void currentMon_ConfigureBasic(uint16_t shuntmv, uint16_t shuntmaxcur, uint16_t 
       (uint8_t)(chargeeff & 0xFF),
   };
 
-  uint8_t ptr = SetMobusRegistersFromFloat(cmd2, 13, fullchargevolt);
-  ptr = SetMobusRegistersFromFloat(cmd2, ptr, tailcurrent);
+  uint8_t ptr = SetModbusRegistersFromFloat(cmd2, 13, fullchargevolt);
+  ptr = SetModbusRegistersFromFloat(cmd2, ptr, tailcurrent);
 
   memcpy(&cmd, &cmd2, sizeof(cmd2));
   xQueueSend(rs485_transmit_q_handle, &cmd, portMAX_DELAY);
@@ -1942,11 +1978,11 @@ void CurrentMonitorSetAdvancedSettings(currentmonitoring_struct newvalues)
   // Register 18 = shunt_max_current
   // Register 19 = shunt_millivolt
 
-  uint8_t ptr = SetMobusRegistersFromFloat(cmd2, 11, newvalues.modbus.overvoltagelimit);
-  ptr = SetMobusRegistersFromFloat(cmd2, ptr, newvalues.modbus.undervoltagelimit);
-  ptr = SetMobusRegistersFromFloat(cmd2, ptr, newvalues.modbus.overcurrentlimit);
-  ptr = SetMobusRegistersFromFloat(cmd2, ptr, newvalues.modbus.undercurrentlimit);
-  ptr = SetMobusRegistersFromFloat(cmd2, ptr, newvalues.modbus.overpowerlimit);
+  uint8_t ptr = SetModbusRegistersFromFloat(cmd2, 11, newvalues.modbus.overvoltagelimit);
+  ptr = SetModbusRegistersFromFloat(cmd2, ptr, newvalues.modbus.undervoltagelimit);
+  ptr = SetModbusRegistersFromFloat(cmd2, ptr, newvalues.modbus.overcurrentlimit);
+  ptr = SetModbusRegistersFromFloat(cmd2, ptr, newvalues.modbus.undercurrentlimit);
+  ptr = SetModbusRegistersFromFloat(cmd2, ptr, newvalues.modbus.overpowerlimit);
 
   /*
     newvalues.shuntcal = p1->value().toInt();
@@ -2572,7 +2608,7 @@ void LoadConfiguration()
   mysettings.totalNumberOfSeriesModules = 1;
   // Default serial port speed
   mysettings.baudRate = COMMS_BAUD_RATE;
-  mysettings.BypassOverTempShutdown = 65;
+  mysettings.BypassMaxTemp = 65;
   mysettings.interpacketgap = 6000;
   // 4.10V bypass
   mysettings.BypassThresholdmV = 4100;
@@ -2747,11 +2783,7 @@ void lazy_tasks(void *param)
       {
         vTaskDelay(pdMS_TO_TICKS(1000));
       }
-      while (prg.sendReadPacketsReceivedRequest(startmodule, endmodule) == false)
-      {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-      }
-      while (prg.sendReadBadPacketCounter(startmodule, endmodule) == false)
+      while (prg.sendReadPacketCountersRequest(startmodule, endmodule) == false)
       {
         vTaskDelay(pdMS_TO_TICKS(1000));
       }
@@ -3146,7 +3178,7 @@ void setup()
   // Receive is IO2 which means the RX1 plug must be disconnected for programming to work!
   SERIAL_DATA.begin(mysettings.baudRate, SERIAL_8N1, 2, 32); // Serial for comms to modules
 
-  myPacketSerial.begin(&SERIAL_DATA, nullptr, &onPacketReceived, SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer));
+  myPacketSerial.begin(&SERIAL_DATA, &onPacketHeader, nullptr, &onPacketReceived, SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer));
 
   SetupRS485();
 

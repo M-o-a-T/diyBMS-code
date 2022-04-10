@@ -154,27 +154,24 @@ void PacketProcessor::TakeAnAnalogueReading(uint8_t mode)
 // X    = 1 bit indicate if packet processed
 // R    = 3 bits reserved not used
 // C    = 4 bits command (16 possible commands)
-void PacketProcessor::onHeaderReceived(PacketStruct *buffer)
+void PacketProcessor::onHeaderReceived(PacketHeader *header)
 {
 
-  uint8_t addr = buffer->h.hops;
+  uint8_t addr = header->hops;
   uint8_t more = 0;
 
-  buffer->h.hops += 1;
+  header->hops += 1;
 
-  if(buffer->h.start > addr || buffer->h.start + buffer->h.cells < addr) {
+  if(header->start > addr || header->start + header->cells < addr) {
     // Not for us. Just forward.
     serial->sendStartCopy(0);
     return;
   }
 
-  switch (buffer->h.command)
+  switch (header->command)
   {
-  case COMMAND::Timing:
-  case COMMAND::Identify:
-  case COMMAND::ResetBalanceCurrentCounter:
   ok:
-    buffer->h.seen = 1;
+    header->seen = 1;
     // fall thru
   default:
     // do nothing. Just forward.
@@ -182,22 +179,33 @@ void PacketProcessor::onHeaderReceived(PacketStruct *buffer)
     serial->sendStartCopy(more);
     break;
 
+  case COMMAND::Timing:
+    more = sizeof(uint32_t);
+    goto ok;
+
+  case COMMAND::Identify:
+  case COMMAND::ResetBalanceCurrentCounter:
+    more = 0;
+    goto ok;
+
   case COMMAND::ReadBalancePowerPWM:
     more = 1;
     goto ok;
 
-  case COMMAND::ReadBadPacketCounter:
-  case COMMAND::ReadPacketReceivedCounter:
-    more = 2;
+  case COMMAND::ReadPacketCounters:
+    more = sizeof(struct PacketReplyCounters);
     goto ok;
 
   case COMMAND::ReadVoltageAndStatus:
+    more = sizeof(struct PacketReplyVoltages);
+    goto ok;
+
   case COMMAND::ReadBalanceCurrentCounter:
-    more = 4;
+    more = sizeof(uint32_t);
     goto ok;
 
   case COMMAND::ReadTemperature:
-    more = 3;
+    more = sizeof(struct PacketReplyTemperature);
     goto ok;
 
   case COMMAND::ReadSettings:
@@ -205,13 +213,17 @@ void PacketProcessor::onHeaderReceived(PacketStruct *buffer)
     goto ok;
 
   case COMMAND::WriteSettings:
-    more = 6;
+    more = sizeof(struct PacketRequestConfig);
   defer:
-    serial->sendDefer(more);
+    if (header->global) {
+      header->seen = 1;
+      serial->sendStartCopy(0);
+    } else
+      serial->sendDefer(more);
     break;
     
   case COMMAND::WriteBalanceLevel:
-    more = 4;
+    more = sizeof(struct PacketRequestBalance);
     goto defer;
   }
 
@@ -221,14 +233,13 @@ void PacketProcessor::onHeaderReceived(PacketStruct *buffer)
 // here we have received our data, so assuming that we don't need to write
 // any, just start forwarding.
 //
-// Reminder: Processing the data may only be done in `processPacket`!
-void PacketProcessor::onReadReceived(PacketStruct *buffer)
+void PacketProcessor::onReadReceived(PacketHeader *header)
 {
-  switch (buffer->h.command & 0x0F)
+  switch (header->command & 0x0F)
   {
   case COMMAND::WriteSettings:
   case COMMAND::WriteBalanceLevel:
-    buffer->h.seen = 1;
+    header->seen = 1;
     // fall through
   default:
     serial->sendStartFrame(0);
@@ -236,32 +247,39 @@ void PacketProcessor::onReadReceived(PacketStruct *buffer)
   }
 }
 
-void PacketProcessor::onPacketReceived(PacketStruct *buffer)
-{
-  uint8_t addr = buffer->h.hops;
-  badpackets += ((buffer->h.sequence - lastSequence) & 0x07) - 1;
-  lastSequence = buffer->h.sequence;
+#define CHECK_LEN(type) \
+    do { \
+      if(serial->receiveCount() < sizeof(PacketHeader) + sizeof(type)) { \
+        serial->sendEndFrame(true); \
+        return; \
+      } \
+    } while(0)
 
-  if(buffer->h.start > addr || buffer->h.start + buffer->h.cells < addr) {
+void PacketProcessor::onPacketReceived(PacketHeader *header)
+{
+  uint8_t addr = header->hops;
+  badpackets += ((header->sequence - lastSequence) & 0x07) - 1;
+  lastSequence = header->sequence;
+
+  if(header->start > addr || header->start + header->cells < addr) {
     // Not for us. Done.
     return;
   }
 
   uint16_t val;
-  switch (buffer->h.command)
+  switch (header->command)
   {
   case COMMAND::ReadVoltageAndStatus:
-    val = raw_adc_voltage;
-    if (BypassOverheatCheck())
-      val |= 0x4000;
-    if (BypassOverheatCheck())
-      val |= 0x8000;
-    serial->sendBuffer(&val,sizeof(val));
-
-    val = bypassThreshold;
-  xmit2:
-    serial->sendBuffer(&val,sizeof(val));
-    break;
+    {
+      PacketReplyVoltages data ;
+      data.voltRaw = raw_adc_voltage;
+      if (BypassOverheatCheck())
+        data.voltRaw |= 0x4000;
+      if (BypassOverheatCheck())
+        data.voltRaw |= 0x8000;
+      serial->sendBuffer(&data,sizeof(data));
+      break;
+    }
 
   case COMMAND::ReadSettings:
     {
@@ -280,11 +298,10 @@ void PacketProcessor::onPacketReceived(PacketStruct *buffer)
 
   case COMMAND::ReadTemperature:
     {
-      uint16_t val1 = raw_adc_onboard_temperature;
-      uint16_t val2 = raw_adc_external_temperature;
-      serial->sendByte(val1 >> 4);
-      serial->sendByte((val1 << 4) | (val2 >> 8));
-      serial->sendByte(val2);
+      struct PacketReplyTemperature data;
+      data.intRaw = raw_adc_onboard_temperature;
+      data.extRaw = raw_adc_external_temperature;
+      serial->sendBuffer(&data, sizeof(data));
       break;
     }
 
@@ -292,9 +309,14 @@ void PacketProcessor::onPacketReceived(PacketStruct *buffer)
     serial->sendByte(WeAreInBypass ? PWMSetPoint : 0);
     break;
 
-  case COMMAND::ReadBadPacketCounter:
-    val = badpackets;
-    goto xmit2;
+  case COMMAND::ReadPacketCounters:
+    {
+      PacketReplyCounters data;
+      data.received = PacketReceivedCounter;
+      data.bad = badpackets;
+      serial->sendBuffer(&data,sizeof(data));
+      break;
+    }
 
   case COMMAND::ReadBalanceCurrentCounter:
     {
@@ -302,10 +324,6 @@ void PacketProcessor::onPacketReceived(PacketStruct *buffer)
       serial->sendBuffer(&val3, sizeof(val3));
       break;
     }
-
-  case COMMAND::ReadPacketReceivedCounter:
-    val = PacketReceivedCounter;
-    goto xmit2;
 
   case COMMAND::ResetPacketCounters:
     badpackets = 0;
@@ -319,39 +337,46 @@ void PacketProcessor::onPacketReceived(PacketStruct *buffer)
     break;
 
   case COMMAND::WriteSettings:
-    
-    val = buffer->data[0];
-    if(val)
-      _config->Calibration = val;
+    {
+      CHECK_LEN(PacketRequestConfig);
 
-    val = buffer->data[1];
-    if(val) {
+      struct PacketRequestConfig *data = (PacketRequestConfig *)(header+1);
+
+      if(data->calibration)
+        _config->Calibration = data->calibration;
+
+      if(data->bypassTemp) {
 #if defined(DIYBMSMODULEVERSION) && (DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20))
-      //Keep temperature low for modules with R19 and R20 not swapped
-      if (val > 715) // see main.cpp
-        val = 715;
+        //Keep temperature low for modules with R19 and R20 not swapped
+        if (data->bypassTemp > 715) // see main.cpp
+          data->bypassTemp = 715;
 #endif
-      _config->BypassTemperature = val;
+        _config->BypassTemperature = data->bypassTemp;
+      }
+
+      if (data->bypassThresh)
+        _config->BypassThreshold = data->bypassThresh;
+
+      //Save settings
+      Settings::WriteConfigToEEPROM((uint8_t *)_config, sizeof(CellModuleConfig), EEPROM_CONFIG_ADDRESS);
+
+      SettingsHaveChanged = true;
+
+      break;
     }
-
-    val = buffer->data[2];
-    if (val)
-      _config->BypassThreshold = val;
-
-    //Save settings
-    Settings::WriteConfigToEEPROM((uint8_t *)_config, sizeof(CellModuleConfig), EEPROM_CONFIG_ADDRESS);
-
-    SettingsHaveChanged = true;
-
-    break;
 
   case COMMAND::ResetBalanceCurrentCounter:
     MilliAmpHourBalanceCounter = 0;
     break;
 
   case COMMAND::WriteBalanceLevel:
-    bypassThreshold = buffer->data[0];
-    break;
+    {
+      CHECK_LEN(PacketRequestBalance);
+      struct PacketRequestBalance *data = (PacketRequestBalance *)(header+1);
+    
+      bypassThreshold = data->voltageRaw;
+      break;
+    }
   }
 
   return;

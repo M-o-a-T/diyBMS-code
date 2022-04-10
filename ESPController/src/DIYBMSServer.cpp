@@ -196,7 +196,9 @@ void DIYBMSServer::saveConfigurationToSDCard(AsyncWebServerRequest *request)
     root["graph_voltagehigh"] = _mysettings->graph_voltagehigh;
     root["graph_voltagelow"] = _mysettings->graph_voltagelow;
 
-    root["BypassOverTempShutdown"] = _mysettings->BypassOverTempShutdown;
+    // old name
+    root["BypassOverTempShutdown"] = _mysettings->BypassMaxTemp;
+    root["BypassMaxTemp"] = _mysettings->BypassMaxTemp;
     root["BypassThresholdmV"] = _mysettings->BypassThresholdmV;
 
     root["timeZone"] = _mysettings->timeZone;
@@ -566,7 +568,7 @@ void DIYBMSServer::resetCounters(AsyncWebServerRequest *request)
 
   // Ask modules to reset bad packet counters
   // If this fails, queue could be full so return error
-  if (_prg->sendBadPacketCounterReset() && _prg->sendResetBalanceCurrentCounter())
+  if (_prg->sendResetPacketCounters() && _prg->sendResetBalanceCurrentCounter())
   {
 
     canbus_messages_failed_sent = 0;
@@ -1269,12 +1271,12 @@ void DIYBMSServer::saveGlobalSetting(AsyncWebServerRequest *request)
   {
 
     AsyncWebParameter *p1 = request->getParam("BypassOverTempShutdown", true);
-    _mysettings->BypassOverTempShutdown = p1->value().toInt();
+    _mysettings->BypassMaxTemp = p1->value().toInt();
 
     AsyncWebParameter *p2 = request->getParam("BypassThresholdmV", true);
     _mysettings->BypassThresholdmV = p2->value().toInt();
 
-    if (_prg->sendSaveGlobalSetting(_mysettings->BypassThresholdmV, _mysettings->BypassOverTempShutdown))
+    if (_prg->sendSaveGlobalSetting(_mysettings->BypassThresholdmV, _mysettings->BypassMaxTemp))
     {
       saveConfiguration();
 
@@ -1284,8 +1286,9 @@ void DIYBMSServer::saveGlobalSetting(AsyncWebServerRequest *request)
       {
         if (cmi[i].valid)
         {
-          cmi[i].BypassThresholdmV = _mysettings->BypassThresholdmV;
-          cmi[i].BypassOverTempShutdown = _mysettings->BypassOverTempShutdown;
+          cmi[i].BypassConfigThresholdmV = _mysettings->BypassThresholdmV;
+          cmi[i].BypassCurrentThresholdmV = 0;
+          cmi[i].BypassMaxTemp = _mysettings->BypassMaxTemp;
         }
       }
 
@@ -1487,7 +1490,9 @@ void DIYBMSServer::settings(AsyncWebServerRequest *request)
   settings["interpacketgap"] = _mysettings->interpacketgap;
 
   settings["bypassthreshold"] = _mysettings->BypassThresholdmV;
-  settings["bypassovertemp"] = _mysettings->BypassOverTempShutdown;
+  settings["bypassmaxtemp"] = _mysettings->BypassMaxTemp;
+  // old 
+  settings["bypassovertemp"] = _mysettings->BypassMaxTemp;
 
   settings["NTPServerName"] = _mysettings->ntpServer;
   settings["TimeZone"] = _mysettings->timeZone;
@@ -1906,8 +1911,10 @@ void DIYBMSServer::modules(AsyncWebServerRequest *request)
 
     if (cmi[c].settingsCached)
     {
-      settings["BypassOverTempShutdown"] = cmi[c].BypassOverTempShutdown;
-      settings["BypassThresholdmV"] = cmi[c].BypassThresholdmV;
+      // old
+      settings["BypassOverTempShutdown"] = cmi[c].BypassMaxTemp;
+      settings["BypassMaxTemp"] = cmi[c].BypassMaxTemp;
+      settings["BypassThresholdmV"] = cmi[c].BypassConfigThresholdmV;
       settings["LoadRes"] = cmi[c].LoadResistance;
       settings["Calib"] = cmi[c].Calibration;
       settings["mVPerADC"] = cmi[c].mVPerADC;

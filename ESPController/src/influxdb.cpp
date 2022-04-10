@@ -1,5 +1,6 @@
 
 #include "influxdb.h"
+#include "DIYBMSServer.h"
 
 static AsyncClient *influx_Client = NULL;
 static int influx_port;

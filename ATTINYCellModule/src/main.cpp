@@ -63,7 +63,7 @@ https://trolsoft.ru/en/uart-calc
 #include "diybms_attiny841.h"
 #include "packet_processor.h"
 
-uint8_t SerialPacketReceiveBuffer[8 + sizeof(PacketStruct)];
+uint8_t SerialPacketReceiveBuffer[sizeof(PacketRequestAny) + sizeof(PacketHeader)];
 
 SerialPacker myPacketSerial;
 
@@ -82,10 +82,12 @@ volatile uint16_t PulsePeriod = 0;
 volatile uint16_t OnPulseCount = 0;
 //volatile bool PacketProcessed = false;
 
+// 2.2100, little-endian
+#define DEFAULT_CALIBRATION 0x400d70a4
+
 void DefaultConfig()
 {
-  //About 2.2007 seems about right
-  myConfig.Calibration = 0x0440; // 2.2007
+  myConfig.Calibration = DEFAULT_CALIBRATION;
 
   //2mV per ADC resolution
   //myConfig.mVPerADC = 2.0; //2048.0/1024.0;
@@ -120,17 +122,17 @@ void onPacketHeader()
   DiyBMSATTiny841::EnableSerial0TX();
 
   //A data packet has just arrived, process it and forward the results to the next module
-  PP.onHeaderReceived((PacketStruct *)SerialPacketReceiveBuffer);
+  PP.onHeaderReceived((PacketHeader *)SerialPacketReceiveBuffer);
 }
 
 void onReadReceived()
 {
-  PP.onReadReceived((PacketStruct *)SerialPacketReceiveBuffer);
+  PP.onReadReceived((PacketHeader *)SerialPacketReceiveBuffer);
 }
 
 void onPacketReceived()
 {
-  PP.onPacketReceived((PacketStruct *)SerialPacketReceiveBuffer);
+  PP.onPacketReceived((PacketHeader *)SerialPacketReceiveBuffer);
 }
 
 ISR(USART0_START_vect)
@@ -153,7 +155,7 @@ void ValidateConfiguration()
 {
   if (myConfig.Calibration == 0)
   {
-    myConfig.Calibration = 0x0440; // 2.007
+    myConfig.Calibration = DEFAULT_CALIBRATION;
   }
 
   if (myConfig.BypassTemperature > DIYBMS_MODULE_SafetyTemperatureCutoff)

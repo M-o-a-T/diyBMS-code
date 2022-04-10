@@ -1,3 +1,110 @@
+# diyBMS v4, M-o-a-T fork
+
+This is a fork of Stuart Pittaway's diyBMS code. Controllers and modules
+*must* both use this and *can not* talk to devices using the original
+firmware.
+
+This fork's main author is Matthias Urlichs <matthias@urlichs.de>.
+
+The hardware is unmodified.
+
+## Changes
+
+### Packet format
+
+We now use variable-length *streamed* data packets. The idea is that a
+message may contain data for multiple consecutive modules. A module will
+receive the header, eat N bytes of payload, send the header and the rest of
+the payload along, add M bytes of data, check the CRC, process the message,
+and send along the CRC.
+
+For error recovery, we now use an inter-packet timeout instead of escaping
+the sync character.
+
+The sequence number has been reduced to three bits. Rationale: If you lose
+more than seven packets in a row, you have worse problems than counting
+exactly how many you've lost.
+
+The end packet number has been replaced with a 5-bit cell count. This
+removes the ability to broadcast messages. See below for how to fix that.
+
+### No more floating point
+
+Floating point operations in the module is slow and eats valuable flash
+storage space, so it has been removed. All math is now done on the
+controller.
+
+### Standard CRC
+
+We now use a "standard" CRC library.
+
+## Future Changes
+
+### CRC polynomial
+
+The main reason for using a polynomial like 0x1021 was that it doesn't have
+many bits set. This saves space when you implement it in hardware.
+
+The problem is that 0x1021 doesn't find many bit errors.
+
+This can be improved. The polynomial 0xBAAD has much better error detection
+characteristics (4 errors for messages up to 256 bytes).
+You can read a paper with more details
+[here](http://users.ece.cmu.edu/~koopman/roses/dsn04/koopman04_crc_poly_embedded.pdf).
+
+Also, we might want to use a 4-bit lookup table instead of looping through each bit.
+
+### Fix queues
+
+There's an open TODO in the controller to use RTOS queues instead of
+cppQueue.
+
+### Protocol versioning
+
+The protocol needs its own version number. Just ask the module(s) what they
+understand.
+
+### Support alerts
+
+Teach modules that they can send messages on their own.
+
+This is usful e.g. for high/low voltage, or to alert the master about a
+location of a broken link (we'd need to trigger that message earlier when
+the hop count is lower, to prevent flooding).
+
+A flag to block incrementing the hop count should be sufficient; alerts
+should have separate packet types.
+
+### Free more header bits
+
+If we restrict module blocks to power-of-two, we can replace the count
+field with a single bit. If that bit is set, the top bit(s) of the starting
+module number can be used to mark how large the block is *and* how far the
+module number shall be shifted to the left.
+
+Let's use a 3-bit block number (i.e. up to eight modules) as an example:
+
+* 0 000 - module 0
+* 0 001 - module 1
+* 0 111 - module 7
+* 1 000 - module 0 and 1
+* 1 001 - module 2 and 3
+* 1 011 - module 6 and 7
+* 1 100 - module 0,1,2,3
+* 1 101 - module 4,5,6,7
+* 1 110 - module 0 through 7: broadcast
+* 1 111 - reserved / no module
+
+This scheme removes the capability to address an arbitrary range of
+modules, but (a) the current code doesn't need that feature and (b) blocks
+tend to be at (or slightly below) a power-of-2-size anyway. We might want
+to tell the last module within a block to increment the hop count by more
+than 1.
+
+----
+
+The following text is from the original README, unmodified.
+
 # diyBMS v4
 
 Version 4 of the diyBMS.  Do-it-yourself battery management system for Lithium ion battery packs and cells

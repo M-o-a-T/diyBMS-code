@@ -28,7 +28,8 @@ start address and <= (start address plus cell count). Thus a message
 may address 1 to 32 cells.
 
 Bit 0 of the flags nibble indicates that the message has been processed by
-at least one module. The other three bits are reserved.
+at least one module. Bit 1 states that the message applies to all modules,
+i.e. modules won't consume data from the packet. The other two bits are reserved.
 
 The master increments the sequence number for every message. Modules
 increment a counter when the incoming sequence number is not what they
@@ -59,6 +60,8 @@ Reads the voltage.
 
 Data: send four bytes:
 * current voltage (sum over the last SAMPLEAVERAGING ADC readings)
+  bit 15: bypass is on
+  bit 14: bypass teperature exceeded
 * dynamic bypass threshold
 
 ### Identify (2)
@@ -101,11 +104,11 @@ Bypass temperature, bypass voltage, and voltage calibration are from EPROM.
 
 Writes settings to EPROM.
 
-Data: read 6 bytes:
+Data: read 8 bytes:
 
+* voltage calibration (4 bytes, ignored if zero)
 * bypass temperature setpoint (ADC value)
 * bypass threshold (ADC voltage, times SAMPLEAVERAGING)
-* voltage calibration
 
 ### ReadBalancePowerPWM (7)
 
@@ -135,6 +138,15 @@ Data: four bytes.
 
 ### ResetBalanceCurrentCounter (11)
 
+Zeroes the balance counter.
+
+No data.
+
 ### WriteBalanceLevel (12)
 
+Set the balance level (ADC voltage, times SAMPLEAVERAGING). Balancing is on
+if the battery voltage exceeds this level. This value is intended for
+balancing while charging and is not saved to storage.
+
+Data: two bytes.
 

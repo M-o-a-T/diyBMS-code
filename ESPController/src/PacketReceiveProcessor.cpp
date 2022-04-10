@@ -8,249 +8,224 @@ bool PacketReceiveProcessor::HasCommsTimedOut()
   return ((millisecondSinceLastPacket > 5 * packetTimerMillisecond) && (millisecondSinceLastPacket > 10000));
 }
 
-bool PacketReceiveProcessor::ProcessReply(PacketStruct *receivebuffer)
+bool PacketReceiveProcessor::ProcessReply(PacketMeta *meta)
 {
   packetsReceived++;
+  bool processed = true;
 
-  //TODO: VALIDATE REPLY START/END RANGES ARE VALID TO AVOID MEMORY BUFFER OVERRUNS
+  _meta = meta;
+  _header = (PacketHeader *)(_meta+1);
+  uint16_t len = _meta->dataLen;
 
-  // Copy to our buffer (probably don't need to do this), just use pointer instead
-  memcpy(&_packetbuffer, receivebuffer, sizeof(_packetbuffer));
-
-  {
-    //Its a valid packet...
+  if(len < sizeof(struct PacketHeader)) {
+    processed = false;
+    _header = nullptr;
+    _dataLen = 0;
+  }
+  if(processed) {
+    // the header is OK
+    _dataLen = len-sizeof(struct PacketHeader);
     packetLastReceivedMillisecond = millis();
 
-    totalModulesFound = _packetbuffer.hops;
+    totalModulesFound = _header->hops;
 
     //Careful of overflowing the uint16_t in sequence
-    if (packetLastReceivedSequence > 0 && _packetbuffer.sequence > 0 && _packetbuffer.sequence != packetLastReceivedSequence + 1)
+    if ((_header->sequence - packetLastReceivedSequence) != 1)
     {
       SERIAL_DEBUG.println();
       SERIAL_DEBUG.print(F("OOS Error, expected="));
-      SERIAL_DEBUG.print(packetLastReceivedSequence + 1, HEX);
+      SERIAL_DEBUG.print((packetLastReceivedSequence + 1)&0x7, HEX);
       SERIAL_DEBUG.print(", got=");
-      SERIAL_DEBUG.println(_packetbuffer.sequence, HEX);
+      SERIAL_DEBUG.println(_header->sequence, HEX);
       totalOutofSequenceErrors++;
     }
 
-    packetLastReceivedSequence = _packetbuffer.sequence;
+    packetLastReceivedSequence = _header->sequence;
 
-    if (ReplyWasProcessedByAModule())
+    if (!_header->seen)
+      processed = false;
+  }
+  if (processed)
+  {
+    //ESP_LOGD(TAG, "Hops %u, start %u end %u, command=%u", _header->hops, _header->start, _header->start+_header->cells+1,_header->command);
+
+    switch (_header->command)
     {
-      //ESP_LOGD(TAG, "Hops %u, start %u end %u, command=%u", _packetbuffer.hops, _packetbuffer.start_address, _packetbuffer.end_address,ReplyForCommand());
+    case COMMAND::ResetPacketCounters:
+    case COMMAND::WriteBalanceLevel:
+      break; // Ignore reply
 
-      switch (ReplyForCommand())
+    case COMMAND::Timing:
+    {
+      if(_dataLen < sizeof(uint32_t))
       {
-      case COMMAND::ResetBadPacketCounter:
-        break; // Ignore reply
-
-      case COMMAND::Timing:
-      {
-        //uint32_t tnow = millis();
-        uint32_t tnow = (_packetbuffer.moduledata[2] << 16) + _packetbuffer.moduledata[3];
-        uint32_t tprevious = (_packetbuffer.moduledata[0] << 16) + _packetbuffer.moduledata[1];
-
-        //Check millis time hasn't rolled over
-        if (tnow > tprevious)
-        {
-          packetTimerMillisecond = tnow - tprevious;
-        }
-
+        processed = false;
         break;
       }
-      case COMMAND::ReadVoltageAndStatus:
-        ProcessReplyVoltage();
+      uint32_t tprevious = *(uint32_t *)(_header+1);
 
-        //ESP_LOGD(TAG, "Updated volt status cells %u to %u", _packetbuffer.start_address, _packetbuffer.end_address);
+      packetTimerMillisecond = _meta->timestamp - tprevious;
+      break;
+    }
+
+    case COMMAND::ReadVoltageAndStatus:
+      processed = ProcessReplyVoltage();
+
+      //ESP_LOGD(TAG, "Updated volt status cells %u to %u", _header->start, _header->start+buffer->h.cells+1);
 
 
-        //TODO: REVIEW THIS LOGIC
-        if (_packetbuffer.end_address == _packetbuffer.hops - 1)
+      //TODO: REVIEW THIS LOGIC
+      if (_header->start+_header->cells+1 == _header->hops)
+      {
+        //We have just processed a voltage reading for the entire chain of modules (all banks)
+        //at this point we should update any display or rules logic
+        //as we have a clean snapshot of voltages and statues
+
+        ESP_LOGD(TAG, "Finished all reads");
+        if (voltageandstatussnapshot_task_handle != NULL)
         {
-          //We have just processed a voltage reading for the entire chain of modules (all banks)
-          //at this point we should update any display or rules logic
-          //as we have a clean snapshot of voltages and statues
-
-          ESP_LOGD(TAG, "Finished all reads");
-          if (voltageandstatussnapshot_task_handle != NULL)
-          {
-            xTaskNotify(voltageandstatussnapshot_task_handle, 0x00, eNotifyAction::eNoAction);
-          }
+          xTaskNotify(voltageandstatussnapshot_task_handle, 0x00, eNotifyAction::eNoAction);
         }
-        break;
-
-      case COMMAND::ReadBadPacketCounter:
-        ProcessReplyBadPacketCount();
-        break;
-
-      case COMMAND::Identify:
-        break; // Ignore reply
-
-      case COMMAND::ReadTemperature:
-        ProcessReplyTemperature();
-        break;
-
-      case COMMAND::ReadSettings:
-        ProcessReplySettings();
-        break;
-
-      case COMMAND::ReadBalancePowerPWM:
-        ProcessReplyBalancePower();
-        break;
-
-      case COMMAND::ReadBalanceCurrentCounter:
-        ProcessReplyReadBalanceCurrentCounter();
-        break;
-      case COMMAND::ReadPacketReceivedCounter:
-        ProcessReplyReadPacketReceivedCounter();
-        break;
       }
+      break;
+
+    case COMMAND::Identify:
+      break; // Ignore reply
+
+    case COMMAND::ReadTemperature:
+      processed = ProcessReplyTemperature();
+      break;
+
+    case COMMAND::ReadSettings:
+      processed = ProcessReplySettings();
+      break;
+
+    case COMMAND::ReadBalancePowerPWM:
+      processed = ProcessReplyBalancePower();
+      break;
+
+    case COMMAND::ReadBalanceCurrentCounter:
+      processed = ProcessReplyReadBalanceCurrentCounter();
+      break;
+
+    case COMMAND::ReadPacketCounters:
+      processed = ProcessReplyPacketCounters();
+      break;
+    }
 
 #if defined(PACKET_LOGGING_RECEIVE)
-      SERIAL_DEBUG.println(F("*OK*"));
+    SERIAL_DEBUG.println(F("*OK*"));
 #endif
 
-      return true;
-    }
+  }
+  else
+  {
+    //Error count for a request that was not processed by any module in the string
+    totalNotProcessedErrors++;
+    ESP_LOGD(TAG, "Modules ignored request");
+  }
+
+  freePacket(_meta);
+  return processed;
+}
+
+#define LOOP(_typ)                                              \
+  if(isShortPacket(sizeof(_typ)))                               \
+    return false;                                               \
+  _typ *data = reinterpret_cast<_typ *>(_data);                 \
+  CellModuleInfo *cell = &cmi[_header->start];                  \
+  for(uint16_t i = 0; i <= _header->cells; data++,cell++,i++)
+
+bool PacketReceiveProcessor::ProcessReplyTemperature()
+{
+  LOOP(PacketReplyTemperature) {
+    cell->internalTemp = cell->ThermistorToCelsius(data->extRaw);
+    cell->externalTemp = cell->ThermistorToCelsius(data->extRaw);
+  }
+  return true;
+}
+
+bool PacketReceiveProcessor::ProcessReplyReadBalanceCurrentCounter()
+{
+  LOOP(uint32_t) {
+    uint32_t current = *data;
+
+    if(cell->LoadResistance != 0)
+      // the raw value is the cell voltage ADC * voltageSamples, added up once per millisecond.
+      // Thus here we divide by resistance and 1000*3600 (msec in an hour) to get mAh.
+      cell->BalanceCurrentCount = (uint16_t)(cell->RawTomV(current)/cell->LoadResistance/3600000.0 +0.5);
     else
-    {
-      //Error count for a request that was not processed by any module in the string
-      totalNotProcessedErrors++;
-      ESP_LOGD(TAG, "Modules ignored request");
-    }
+      cell->BalanceCurrentCount = 0;
+  }
+  return true;
+}
+
+bool PacketReceiveProcessor::ProcessReplyPacketCounters()
+{
+  LOOP(PacketReplyCounters) {
+    cell->PacketReceivedCount = data->received;
+    cell->badPacketCount = data->bad;
   }
 
+  return true;
+}
+
+bool PacketReceiveProcessor::ProcessReplyBalancePower()
+{
+  LOOP(uint8_t) {
+    cell->PWMValue = *data;
+  }
+  return true;
+}
+
+bool PacketReceiveProcessor::ProcessReplyVoltage()
+{
+  LOOP(PacketReplyVoltages) {
+    // bit 15 = In bypass
+    // bit 14 = Bypass over temperature
+    // bit 13 = free
+    // bit 12,11,10: required for up to 8 samples
+
+    uint16_t val = data->voltRaw;
+    cell->inBypass = (val & 0x8000) > 0;
+    cell->bypassOverTemp = (val & 0x4000) > 0;
+
+    val &= 0x1FFF;
+    float mV = cell->RawTomV(val);
+    cell->voltagemV = mV;
+    if(mV) {
+      if (mV > cell->voltagemVMax)
+        cell->voltagemVMax = mV;
+      if (mV < cell->voltagemVMin)
+        cell->voltagemVMin = mV;
+
+      cell->valid = true;
+    }
+    
+    cell->BypassCurrentThresholdmV = cell->RawTomV(data->bypassRaw);
+  }
+  return true;
+}
+
+bool PacketReceiveProcessor::ProcessReplySettings()
+{
+  LOOP(PacketReplySettings) {
+    cell->BoardVersionNumber = data->boardVersion;
+    cell->BypassMaxTemp = cell->ThermistorToCelsius(data->bypassTempRaw);
+    cell->BypassConfigThresholdmV = cell->RawTomV(data->bypassVoltRaw);
+    cell->voltageSamples = data->numSamples;
+    cell->LoadResistance = (float)data->loadResRaw / 16.0;
+    cell->Calibration = *reinterpret_cast<float*>((void *)&data->calibration);
+    cell->CodeVersionNumber = data->gitVersion;
+
+    cell->settingsCached = true;
+  }
+  return true;
+}
+
+bool PacketReceiveProcessor::isShortPacket(uint16_t len)
+{
+  if(_meta->dataLen < (_header->cells+1) * len)
+    return true;
   return false;
-}
-
-void PacketReceiveProcessor::ProcessReplyBadPacketCount()
-{
-  // Called when a decoded packet has arrived in buffer for command
-  uint8_t q = 0;
-  for (uint8_t i = _packetbuffer.start_address; i <= _packetbuffer.end_address; i++)
-  {
-    cmi[i].badPacketCount = _packetbuffer.moduledata[q];
-    q++;
-  }
-}
-
-void PacketReceiveProcessor::ProcessReplyTemperature()
-{
-  // Called when a decoded packet has arrived in buffer for command 3
-
-  // 40 offset for below zero temps
-  uint8_t q = 0;
-  for (uint8_t i = _packetbuffer.start_address; i <= _packetbuffer.end_address; i++)
-  {
-    cmi[i].internalTemp = ((_packetbuffer.moduledata[q] & 0xFF00) >> 8) - 40;
-    cmi[i].externalTemp = (_packetbuffer.moduledata[q] & 0x00FF) - 40;
-    q++;
-  }
-}
-
-void PacketReceiveProcessor::ProcessReplyReadBalanceCurrentCounter()
-{
-  uint8_t q = 0;
-  for (uint8_t i = _packetbuffer.start_address; i <= _packetbuffer.end_address; i++)
-  {
-    cmi[i].BalanceCurrentCount = _packetbuffer.moduledata[q];
-    q++;
-  }
-}
-void PacketReceiveProcessor::ProcessReplyReadPacketReceivedCounter()
-{
-  uint8_t q = 0;
-  for (uint8_t i = _packetbuffer.start_address; i <= _packetbuffer.end_address; i++)
-  {
-    cmi[i].PacketReceivedCount = _packetbuffer.moduledata[q];
-    q++;
-  }
-}
-
-void PacketReceiveProcessor::ProcessReplyBalancePower()
-{
-  // Called when a decoded packet has arrived in _packetbuffer for command 1
-  uint8_t q = 0;
-  for (uint8_t i = _packetbuffer.start_address; i <= _packetbuffer.end_address; i++)
-  {
-    cmi[i].PWMValue = _packetbuffer.moduledata[q];
-    q++;
-  }
-}
-
-void PacketReceiveProcessor::ProcessReplyVoltage()
-{
-  // Called when a decoded packet has arrived in _packetbuffer for command 1
-
-  if (_packetbuffer.end_address < _packetbuffer.start_address)
-    return;
-
-  for (uint8_t i = 0; i <= _packetbuffer.end_address - _packetbuffer.start_address; i++)
-  {
-
-    CellModuleInfo *cellptr = &cmi[_packetbuffer.start_address + i];
-
-    // 3 top bits remaining
-    // X = In bypass
-    // Y = Bypass over temperature
-    // Z = Not used
-
-    cellptr->voltagemV = _packetbuffer.moduledata[i] & 0x1FFF;
-    cellptr->inBypass = (_packetbuffer.moduledata[i] & 0x8000) > 0;
-    cellptr->bypassOverTemp = (_packetbuffer.moduledata[i] & 0x4000) > 0;
-
-    if (cellptr->voltagemV > cellptr->voltagemVMax)
-    {
-      cellptr->voltagemVMax = cellptr->voltagemV;
-    }
-
-    if (cellptr->voltagemV < cellptr->voltagemVMin)
-    {
-      cellptr->voltagemVMin = cellptr->voltagemV;
-    }
-
-    if (cellptr->voltagemV > 0)
-    {
-      cellptr->valid = true;
-    }
-  }
-}
-
-void PacketReceiveProcessor::ProcessReplySettings()
-{
-
-  uint8_t m = _packetbuffer.start_address;
-
-  // TODO Validate b and m here to prevent array overflow
-  cmi[m].settingsCached = true;
-
-  FLOATUNION_t myFloat;
-
-  myFloat.word[0] = _packetbuffer.moduledata[0];
-  myFloat.word[1] = _packetbuffer.moduledata[1];
-
-  // Arduino float (4 byte)
-  cmi[m].LoadResistance = myFloat.number;
-  // Arduino float(4 byte)
-  myFloat.word[0] = _packetbuffer.moduledata[2];
-  myFloat.word[1] = _packetbuffer.moduledata[3];
-  cmi[m].Calibration = myFloat.number;
-
-  // Arduino float(4 byte)
-  myFloat.word[0] = _packetbuffer.moduledata[4];
-  myFloat.word[1] = _packetbuffer.moduledata[5];
-  cmi[m].mVPerADC = myFloat.number;
-  // uint8_t
-  cmi[m].BypassOverTempShutdown = _packetbuffer.moduledata[6] & 0x00FF;
-  // uint16_t
-  cmi[m].BypassThresholdmV = _packetbuffer.moduledata[7];
-  // uint16_t
-  cmi[m].Internal_BCoefficient = _packetbuffer.moduledata[8];
-  // uint16_t
-  cmi[m].External_BCoefficient = _packetbuffer.moduledata[9];
-  // uint16_t
-  cmi[m].BoardVersionNumber = _packetbuffer.moduledata[10];
-
-  cmi[m].CodeVersionNumber = (_packetbuffer.moduledata[14] << 16) + _packetbuffer.moduledata[15];
 }

@@ -15,30 +15,6 @@
 //Define maximum allowed temperature as safety cut off
 #define DIYBMS_MODULE_SafetyTemperatureCutoff 940 // ~90 degC for B~4000
 
-#define MAX_PACKET_SIZE 16
-
-
-//NOTE THIS MUST BE EVEN IN SIZE (BYTES) ESP8266 IS 32 BIT AND WILL ALIGN AS SUCH!
-struct PacketHeader
-{
-  uint8_t start;
-  unsigned int _reserved:3;
-  unsigned int seen:1;
-  unsigned int command:4;
-  uint8_t hops;
-  unsigned int cells:5;
-  unsigned int sequence:3;
-} __attribute__((packed));
-
-struct PacketStruct
-{
-  struct PacketHeader h;
-  uint16_t data[MAX_PACKET_SIZE/2+1];
-} __attribute__((packed));
-
-#if MAX_PACKET_SIZE < 10
-#error Config data size is 6 bytes, plus 4 bytes header. Increase MAX_PACKET_SIZE.
-#endif
 class PacketProcessor
 {
 public:
@@ -50,9 +26,10 @@ public:
   }
   ~PacketProcessor() {}
 
-  void onHeaderReceived(PacketStruct *receivebuffer);
-  void onReadReceived(PacketStruct *receivebuffer);
-  void onPacketReceived(PacketStruct *receivebuffer);
+  // incoming packet handling
+  void onHeaderReceived(PacketHeader *header);
+  void onReadReceived(PacketHeader *header);
+  void onPacketReceived(PacketHeader *header);
 
   void ADCReading(uint16_t value);
   void TakeAnAnalogueReading(uint8_t mode);
@@ -106,8 +83,6 @@ private:
 
   uint16_t bypassThreshold = 0;
   uint8_t lastSequence = 0;
-
-  bool processPacket(PacketStruct *buffer);
 
   volatile uint8_t adcmode = 0;
   volatile uint16_t raw_adc_voltage;

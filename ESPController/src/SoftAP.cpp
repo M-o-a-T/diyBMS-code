@@ -105,7 +105,7 @@ void DIYBMSSoftAP::SetupAccessPoint(AsyncWebServer *webserver)
 
   IPAddress IP = WiFi.softAPIP();
 
-  // Set up mDNS responder, using consistant name of http://diybms.local
+  // Set up mDNS responder, using consistent name of http://diybms.local
   if (!MDNS.begin("diybms"))
   {
     ESP_LOGE("Error setting up MDNS responder!");

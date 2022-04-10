@@ -56,7 +56,6 @@ void tftdisplay_avrprogrammer_stop();
 
 //I hate EXTERN....
 extern Rules rules;
-extern diybms_eeprom_settings mysettings;
 extern HAL_ESP32 hal;
 extern ControllerState _controller_state;
 extern TaskHandle_t tftsleep_task_handle;

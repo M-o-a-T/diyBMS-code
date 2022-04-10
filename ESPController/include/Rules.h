@@ -30,10 +30,10 @@ enum Rule : uint8_t
 enum InternalWarningCode : uint8_t
 {
     NoWarning = 0,
-    ModuleInconsistantBypassVoltage = 1,
-    ModuleInconsistantBypassTemperature = 2,
-    ModuleInconsistantCodeVersion = 3,
-    ModuleInconsistantBoardRevision = 4,
+    ModuleInconsistentBypassVoltage = 1,
+    ModuleInconsistentBypassTemperature = 2,
+    ModuleInconsistentCodeVersion = 3,
+    ModuleInconsistentBoardRevision = 4,
     LoggingEnabledNoSDCard = 5,
     AVRProgrammingMode =6
 };

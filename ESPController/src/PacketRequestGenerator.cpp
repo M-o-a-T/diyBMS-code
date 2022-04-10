@@ -1,77 +1,50 @@
 #include "PacketRequestGenerator.h"
-
-void PacketRequestGenerator::clearSettingsForAllModules()
-{
-  // Force refresh of settings
-  for (size_t i = 0; i < maximum_controller_cell_modules; i++)
-  {
-    cmi[i].settingsCached = false;
-  }
-}
+#include "common.h"
+#include "DIYBMSServer.h"
 
 bool PacketRequestGenerator::sendSaveGlobalSetting(uint16_t BypassThresholdmV, uint8_t BypassOverTempShutdown)
 {
-  PacketStruct _packetbuffer;
-  clearPacket(&_packetbuffer);
+  PacketMeta *meta = allocatePacket(sizeof(PacketRequestConfig) * mysettings.totalNumberOfSeriesModules);
+  PacketHeader *header = (PacketHeader *)(meta+1);
+  PacketRequestConfig *data = (PacketRequestConfig *)(header+1);
 
   //Ask all modules to set bypass and temperature value
-  setPacketAddressBroadcast(&_packetbuffer);
-  //Command - WriteSettings
-  _packetbuffer.command = COMMAND::WriteSettings;
+  setPacketAddressBroadcast(header);
+  header->command = COMMAND::WriteSettings;
 
-  //Fill packet with 0xFFFF values - module ignores settings with this value
-  setmoduledataFFFF(&_packetbuffer);
-  _packetbuffer.moduledata[6] = BypassOverTempShutdown;
-  _packetbuffer.moduledata[7] = BypassThresholdmV;
-  if (pushPacketToQueue(&_packetbuffer)) {
-    clearSettingsForAllModules();
+  CellModuleInfo *cell = &cmi[0];
+  for(; cell != &cmi[mysettings.totalNumberOfSeriesModules]; data++,cell++) {
+    // Force refresh of settings
+    cell->settingsCached = false;
 
-    return true;
+    data->calibration = *reinterpret_cast<uint32_t *>((void *)&cell->Calibration);
+    data->bypassTemp = cell->CelsiusToThermistor(cell->BypassMaxTemp);
+    data->bypassThresh = cell->mVToRaw(cell->BypassConfigThresholdmV);
   }
 
-  return false;
+  return pushPacketToQueue(meta);
 }
 
 bool PacketRequestGenerator::sendSaveSetting(uint8_t m, uint16_t BypassThresholdmV, uint8_t BypassOverTempShutdown, float Calibration)
 {
-  PacketStruct _packetbuffer;
-  clearPacket(&_packetbuffer);
-  setPacketAddressModuleRange(&_packetbuffer, m, m);
-  //Command - WriteSettings
-  _packetbuffer.command = COMMAND::WriteSettings;
+  PacketMeta *meta = allocatePacket(sizeof(PacketRequestConfig));
+  PacketHeader *header = (PacketHeader *)(meta+1);
+  PacketRequestConfig *data = (PacketRequestConfig *)(header+1);
 
-  //Fill packet with 0xFFFF values - module ignores settings with this value
-  setmoduledataFFFF(&_packetbuffer);
+  CellModuleInfo *cell = &cmi[m];
+
+  setPacketAddress(header, m);
+  header->command = COMMAND::WriteSettings;
+
 
   // Force refresh of settings
-  cmi[m].settingsCached = false;
+  cell->settingsCached = false;
 
-  FLOATUNION_t myFloat;
+  data->calibration = *reinterpret_cast<uint32_t *>((void *)&cell->Calibration);
+  data->bypassTemp = cell->CelsiusToThermistor(cell->BypassMaxTemp);
+  data->bypassThresh = cell->mVToRaw(cell->BypassConfigThresholdmV);
 
-  //myFloat.number = LoadResistance;
-  //_packetbuffer.moduledata[0] = myFloat.word[0];
-  //_packetbuffer.moduledata[1] = myFloat.word[1];
-
-  // Arduino float(4 byte)
-  myFloat.number = Calibration;
-  _packetbuffer.moduledata[2] = myFloat.word[0];
-  _packetbuffer.moduledata[3] = myFloat.word[1];
-
-  // Arduino float(4 byte)
-  //myFloat.number = mVPerADC;
-  //_packetbuffer.moduledata[4] = myFloat.word[0];
-  //_packetbuffer.moduledata[5] = myFloat.word[1];
-
-  _packetbuffer.moduledata[6] = BypassOverTempShutdown;
-  _packetbuffer.moduledata[7] = BypassThresholdmV;
-  //_packetbuffer.moduledata[8] = Internal_BCoefficient;
-  //_packetbuffer.moduledata[9] = External_BCoefficient;
-  return pushPacketToQueue(&_packetbuffer);
-}
-
-bool PacketRequestGenerator::sendReadBadPacketCounter(uint8_t startmodule, uint8_t endmodule)
-{
-  return BuildAndSendRequest(COMMAND::ReadBadPacketCounter, startmodule, endmodule);
+  return pushPacketToQueue(meta);
 }
 
 bool PacketRequestGenerator::sendCellVoltageRequest(uint8_t startmodule, uint8_t endmodule)
@@ -105,9 +78,9 @@ bool PacketRequestGenerator::sendReadBalanceCurrentCountRequest(uint8_t startmod
   return BuildAndSendRequest(COMMAND::ReadBalanceCurrentCounter, startmodule, endmodule);
 }
 
-bool PacketRequestGenerator::sendReadPacketsReceivedRequest(uint8_t startmodule, uint8_t endmodule)
+bool PacketRequestGenerator::sendReadPacketCountersRequest(uint8_t startmodule, uint8_t endmodule)
 {
-  return BuildAndSendRequest(COMMAND::ReadPacketReceivedCounter, startmodule, endmodule);
+  return BuildAndSendRequest(COMMAND::ReadPacketCounters, startmodule, endmodule);
 }
 
 bool PacketRequestGenerator::sendReadBalancePowerRequest(uint8_t startmodule, uint8_t endmodule)
@@ -115,9 +88,9 @@ bool PacketRequestGenerator::sendReadBalancePowerRequest(uint8_t startmodule, ui
   return BuildAndSendRequest(COMMAND::ReadBalancePowerPWM, startmodule, endmodule);
 }
 
-bool PacketRequestGenerator::sendBadPacketCounterReset()
+bool PacketRequestGenerator::sendResetPacketCounters()
 {
-  return BuildAndSendRequest(COMMAND::ResetBadPacketCounter);
+  return BuildAndSendRequest(COMMAND::ResetPacketCounters);
 }
 bool PacketRequestGenerator::sendResetBalanceCurrentCounter()
 {
@@ -128,28 +101,32 @@ bool PacketRequestGenerator::BuildAndSendRequest(COMMAND command)
 {
   //ESP_LOGD(TAG,"Build %u",command);
 
-  PacketStruct _packetbuffer;
-  clearPacket(&_packetbuffer);
-  setPacketAddressBroadcast(&_packetbuffer);
-  _packetbuffer.command = command;
-  return pushPacketToQueue(&_packetbuffer);
+  PacketMeta *meta = allocatePacket(0);
+  PacketHeader *header = (PacketHeader *)(meta+1);
+
+  setPacketAddressBroadcast(header);
+  header->command = command;
+  return pushPacketToQueue(meta);
 }
 
 bool PacketRequestGenerator::BuildAndSendRequest(COMMAND command, uint8_t startmodule, uint8_t endmodule)
 {
   //ESP_LOGD(TAG,"Build %u, %u to %u",command,startmodule,endmodule);
 
-  PacketStruct _packetbuffer;
-  clearPacket(&_packetbuffer);
-  setPacketAddressModuleRange(&_packetbuffer, startmodule, endmodule);
-  _packetbuffer.command = command;
-  return pushPacketToQueue(&_packetbuffer);
+  PacketMeta *meta = allocatePacket(0);
+  PacketHeader *header = (PacketHeader *)(meta+1);
+
+  setPacketAddressRange(header, startmodule, endmodule);
+  header->command = command;
+  return pushPacketToQueue(meta);
 }
 
-bool PacketRequestGenerator::pushPacketToQueue(PacketStruct *_packetbuffer)
+bool PacketRequestGenerator::pushPacketToQueue(PacketMeta *meta)
 {
-  if (!_requestq->push(_packetbuffer)) {
+  // always consumes the packet
+  if (!_requestq->push(&meta)) {
     //ESP_LOGE(TAG,"Queue full");
+    freePacket(meta);
     return false;
   }
 
@@ -157,22 +134,14 @@ bool PacketRequestGenerator::pushPacketToQueue(PacketStruct *_packetbuffer)
   return true;
 }
 
-void PacketRequestGenerator::setPacketAddressModuleRange(PacketStruct *_packetbuffer, uint8_t startmodule, uint8_t endmodule)
+void PacketRequestGenerator::setPacketAddressRange(PacketHeader *header, uint8_t startmodule, uint8_t endmodule)
 {
-  _packetbuffer->start_address = startmodule;
-  _packetbuffer->end_address = endmodule;
+  header->start = startmodule;
+  header->cells = endmodule-startmodule;
 }
 
-void PacketRequestGenerator::setPacketAddressBroadcast(PacketStruct *_packetbuffer)
+void PacketRequestGenerator::setPacketAddressBroadcast(PacketHeader *header)
 {
-  setPacketAddressModuleRange(_packetbuffer, 0, maximum_controller_cell_modules);
+  setPacketAddressRange(header, 0, maximum_controller_cell_modules);
 }
 
-//Fill packet with 0xFFFF values - module ignores settings with this value
-void PacketRequestGenerator::setmoduledataFFFF(PacketStruct *_packetbuffer)
-{
-  for (int a = 0; a < maximum_cell_modules_per_packet; a++)
-  {
-    _packetbuffer->moduledata[a] = 0xFFFF;
-  }
-}

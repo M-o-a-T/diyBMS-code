@@ -32,6 +32,7 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 TFT_eSPI tft = TFT_eSPI();
 
 #include "Rules.h"
+#include "DIYBMSServer.h"
 
 #include "tft.h"
 #include "tft_splash_image.h"

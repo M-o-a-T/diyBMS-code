@@ -32,37 +32,7 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 
 #define nop  __asm__("nop\n\t");
 
-
-struct ReadConfigData
-{
-    uint16_t boardVersion;
-    uint16_t bypassTemp;
-    uint16_t bypassThreshold;
-    uint8_t numSamples;
-    uint8_t loadResistance;
-    uint32_t voltageCalibration;
-    uint32_t gitVersion; 
-} __attribute__((__packed__));
-
-
-// Only the lowest 4 bits can be used!
-enum COMMAND: uint8_t
-{
-    ResetPacketCounters = 0,
-    ReadVoltageAndStatus=1,
-    Identify=2,
-    ReadTemperature=3,
-    ReadBadPacketCounter=4,
-    ReadSettings=5,
-    WriteSettings=6,
-    ReadBalancePowerPWM=7,
-    Timing=8,
-    ReadBalanceCurrentCounter=9,
-    ReadPacketReceivedCounter=10,
-    ResetBalanceCurrentCounter=11,
-    WriteBalanceLevel=12,
-};
-
+#include "common.h"
 
 //Default values
 struct CellModuleConfig {
@@ -74,7 +44,7 @@ struct CellModuleConfig {
   //float LoadResistance;  // hardcoded
 
   //Voltage Calibration
-  uint16_t Calibration;  // only stored
+  uint32_t Calibration;  // only stored
   //Reference voltage (millivolt) normally 2.00mV
   //float mVPerADC;
   //Internal Thermistor settings
