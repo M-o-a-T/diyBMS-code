@@ -70,8 +70,6 @@ bool server_running = false;
 RelayState previousRelayState[RELAY_TOTAL];
 bool previousRelayPulse[RELAY_TOTAL];
 
-volatile enumInputState InputState[INPUTS_TOTAL];
-
 bool NTPsyncEventTriggered = false; // True if a time even has been triggered
 NTPSyncEvent_t ntpEvent;            // Last triggered event
 
@@ -104,7 +102,6 @@ Ticker myTimer;
 Ticker myTransmitTimer;
 Ticker myReplyTimer;
 Ticker myLazyTimer;
-Ticker wifiReconnectTimer;
 Ticker mqttReconnectTimer;
 Ticker myTimerSendMqttPacket;
 Ticker myTimerSendMqttStatus;
