@@ -48,8 +48,7 @@ const char *TAG = "diybms";
 #include <ESPAsyncWebServer.h>
 #include <AsyncMqttClient.h>
 
-#include <SerialPacker.h>
-#include <cppQueue.h>
+#include "serializer.h"
 
 #include <ArduinoJson.h>
 #include "defines.h"
@@ -137,23 +136,6 @@ QueueHandle_t rs485_transmit_q_handle;
 #include "settings.h"
 #include "SoftAP.h"
 #include "DIYBMSServer.h"
-#include "PacketRequestGenerator.h"
-#include "PacketReceiveProcessor.h"
-
-// Instantiate queue to hold packets ready for transmission
-// TODO: Move to RTOS queues instead
-cppQueue requestQueue(sizeof(PacketMeta *), 30, FIFO);
-cppQueue replyQueue(sizeof(PacketMeta *), 4, FIFO);
-
-PacketRequestGenerator prg = PacketRequestGenerator(&requestQueue);
-PacketReceiveProcessor receiveProc = PacketReceiveProcessor();
-
-// Memory to hold one serial buffer
-uint8_t SerialPacketReceiveBuffer[sizeof(struct PacketHeader)+sizeof(union PacketResponseAny)*maximum_cell_modules_per_packet];
-
-SerialPacker myPacketSerial;
-
-uint16_t sequence = 0;
 
 ControllerState _controller_state = ControllerState::Unknown;
 
@@ -998,20 +980,12 @@ void replyqueue_task(void *param)
 {
   for (;;)
   {
-    // Delay 1 second
+    // Delay 0.1 second
     vTaskDelay(pdMS_TO_TICKS(100));
 
     while (!replyQueue.isEmpty())
     {
-      PacketMeta *ps;
-      replyQueue.pop(&ps);
-
-#if defined(PACKET_LOGGING_RECEIVE)
-// Process decoded incoming packet
-// dumpPacketToDebug('R', &ps);
-#endif
-
-      if (!receiveProc.ProcessReply(ps))
+      if (!processOnePacket()
       {
         // Error blue
         LED(RGBLED::Blue);
@@ -1025,37 +999,6 @@ void replyqueue_task(void *param)
       // Small delay to allow watchdog to be fed
       vTaskDelay(pdMS_TO_TICKS(10));
     }
-  }
-}
-
-void onPacketHeader()
-{
-  // a CRC error is a packet where onPacketReceived is not called
-  receiveProc.pendingCRCErrors += 1;
-}
-
-void onPacketReceived()
-{
-  // let's just count hacked-up packets as error
-  receiveProc.totalCRCErrors += receiveProc.pendingCRCErrors-1;
-  receiveProc.pendingCRCErrors = 0;
-
-  if(myPacketSerial.receiveCount() < sizeof(struct PacketHeader)) {
-    receiveProc.totalNotProcessedErrors += 1;
-    return;
-  }
-
-  PacketMeta *ps = (PacketMeta *)calloc(1,sizeof(PacketMeta)+myPacketSerial.receiveCount());
-
-  ps->dataLen = myPacketSerial.receiveCount();
-  ps->timestamp = millis();
-  memcpy(ps+1, SerialPacketReceiveBuffer, ps->dataLen);
-
-  if (!replyQueue.push(&ps))
-  {
-    ESP_LOGE(TAG, "Reply Q full");
-    receiveProc.totalNotProcessedErrors += 1; // TODO?
-    free(ps);
   }
 }
 
@@ -1076,43 +1019,7 @@ void transmit_task(void *param)
     while(requestQueue.isEmpty())
       vTaskDelay(pdMS_TO_TICKS(delay_wait));
 
-    PacketMeta *meta;
-    requestQueue.pop(&meta);
-    PacketHeader *header = (PacketHeader *)(meta+1);
-
-    sequence++;
-    header->sequence = sequence;
-
-    uint32_t t = millis();
-    uint16_t len = sizeof(PacketHeader)+meta->dataLen;
-    if (header->command == COMMAND::Timing)
-      len += sizeof(t);
-
-    // delay so modules can add data without getting overrun by the next
-    // packet.
-    // Serial overhead: start(1) + len (1/2) plus CRC (2), plus some time
-    // for slack, so let's use 8.
-    // A byte takes 10 bits if no parity and one stop bit, but maybe a
-    // module interrupt delays sending and/or somebody decides to turn on
-    // parity.
-    uint16_t delay_ms = ((8+len + (uint32_t)meta->dataExpect * (header->cells+1)) * 12) / mysettings.baudRate;
-
-    myPacketSerial.sendStartFrame(len);
-    myPacketSerial.sendBuffer(&header, sizeof(PacketHeader)+meta->dataLen);
-
-    // Add the timestamp
-    if (header->command == COMMAND::Timing)
-      myPacketSerial.sendBuffer(&t,sizeof(t));
-
-    myPacketSerial.sendEndFrame();
-
-    // Output the packet we just transmitted to debug console
-    //#if defined(PACKET_LOGGING_SEND)
-    //      dumpPacketToDebug('S', &transmitBuffer);
-    //#endif
-    
-    // Subtract the time taken so far, as we don't know how much the RTOS
-    // buffers for us
+    uint16_t delay_ms = transmitOnePacket();
     vTaskDelay(pdMS_TO_TICKS(delay_ms - (millis()-t)));
   }
 }
@@ -1399,12 +1306,12 @@ void enqueue_task(void *param)
       }
 
       // Request voltage, but if queue is full, sleep and try again (other threads will reduce the queue)
-      while (prg.sendCellVoltageRequest(startmodule, endmodule) == false)
+      while (transmitProc.sendCellVoltageRequest(startmodule, endmodule) == false)
       {
         vTaskDelay(pdMS_TO_TICKS(500));
       }
       // Same for temperature
-      while (prg.sendCellTemperatureRequest(startmodule, endmodule) == false)
+      while (transmitProc.sendCellTemperatureRequest(startmodule, endmodule) == false)
       {
         vTaskDelay(pdMS_TO_TICKS(500));
       }
@@ -1414,7 +1321,7 @@ void enqueue_task(void *param)
       {
         if (cmi[m].inBypass)
         {
-          while (prg.sendReadBalancePowerRequest(startmodule, endmodule) == false)
+          while (transmitProc.sendReadBalancePowerRequest(startmodule, endmodule) == false)
           {
             vTaskDelay(pdMS_TO_TICKS(500));
           }
@@ -1539,7 +1446,7 @@ void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info)
   */
   if (!server_running)
   {
-    DIYBMSServer::StartServer(&server, &mysettings, &SD, &prg, &receiveProc, &_controller_state, &rules, &sdcardaction_callback, &hal);
+    DIYBMSServer::StartServer(&server, &mysettings, &SD, &transmitProc, &receiveProc, &_controller_state, &rules, &sdcardaction_callback, &hal);
     server_running = true;
   }
 
@@ -1611,7 +1518,7 @@ void mqtt2(void *param)
 
       // Set error flag if we have attempted to send 2*number of banks without a reply
       root["commserr"] = receiveProc.HasCommsTimedOut() ? 1 : 0;
-      root["sent"] = prg.packetsGenerated;
+      root["sent"] = transmitProc.packetsGenerated;
       root["received"] = receiveProc.packetsReceived;
       root["badcrc"] = receiveProc.totalCRCErrors;
       root["ignored"] = receiveProc.totalNotProcessedErrors;
@@ -2734,7 +2641,7 @@ void lazy_tasks(void *param)
     // Task 1
     ESP_LOGI(TAG, "Task 1");
     //  Send a "ping" message through the cells to get a round trip time
-    while (prg.sendTimingRequest() == false)
+    while (transmitProc.sendTimingRequest() == false)
     {
       vTaskDelay(pdMS_TO_TICKS(1000));
     }
@@ -2750,7 +2657,7 @@ void lazy_tasks(void *param)
     {
       if (cmi[module].valid && !cmi[module].settingsCached)
       {
-        while (prg.sendGetSettingsRequest(module) == false)
+        while (transmitProc.sendGetSettingsRequest(module) == false)
         {
           vTaskDelay(pdMS_TO_TICKS(1000));
         };
@@ -2779,11 +2686,11 @@ void lazy_tasks(void *param)
       }
 
       ESP_LOGI(TAG, "Task 3, s=%i e=%i", startmodule, endmodule);
-      while (prg.sendReadBalanceCurrentCountRequest(startmodule, endmodule) == false)
+      while (transmitProc.sendReadBalanceCurrentCountRequest(startmodule, endmodule) == false)
       {
         vTaskDelay(pdMS_TO_TICKS(1000));
       }
-      while (prg.sendReadPacketCountersRequest(startmodule, endmodule) == false)
+      while (transmitProc.sendReadPacketCountersRequest(startmodule, endmodule) == false)
       {
         vTaskDelay(pdMS_TO_TICKS(1000));
       }
@@ -3178,7 +3085,7 @@ void setup()
   // Receive is IO2 which means the RX1 plug must be disconnected for programming to work!
   SERIAL_DATA.begin(mysettings.baudRate, SERIAL_8N1, 2, 32); // Serial for comms to modules
 
-  myPacketSerial.begin(&SERIAL_DATA, &onPacketHeader, nullptr, &onPacketReceived, SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer));
+  initSerializer();
 
   SetupRS485();
 

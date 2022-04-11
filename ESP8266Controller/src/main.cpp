@@ -45,10 +45,9 @@
 #include <Ticker.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncMqttClient.h>
-#include <SerialEncoder.h>
-#include <cppQueue.h>
 
 #include "defines.h"
+#include "serializer.h"
 
 #include <ArduinoOTA.h>
 
@@ -96,22 +95,6 @@ CellModuleInfo cmi[maximum_controller_cell_modules];
 #include "settings.h"
 #include "SoftAP.h"
 #include "DIYBMSServer.h"
-#include "PacketRequestGenerator.h"
-#include "PacketReceiveProcessor.h"
-
-// Instantiate queue to hold packets ready for transmission
-cppQueue requestQueue(sizeof(PacketStruct), 24, FIFO);
-
-cppQueue replyQueue(sizeof(PacketStruct), 8, FIFO);
-
-PacketRequestGenerator prg = PacketRequestGenerator(&requestQueue);
-
-PacketReceiveProcessor receiveProc = PacketReceiveProcessor();
-
-// Memory to hold in and out serial buffer
-uint8_t SerialPacketReceiveBuffer[2 * sizeof(PacketStruct)];
-
-SerialEncoder myPacketSerial;
 
 WiFiEventHandler wifiConnectHandler;
 WiFiEventHandler wifiDisconnectHandler;
@@ -128,8 +111,6 @@ Ticker myTimerSendMqttStatus;
 Ticker myTimerSendInfluxdbPacket;
 Ticker myTimerSwitchPulsedRelay;
 
-uint16_t sequence = 0;
-
 ControllerState ControlState = ControllerState::Unknown;
 
 bool OutputsEnabled;
@@ -143,10 +124,12 @@ void dumpByte(uint8_t data)
     SERIAL_DEBUG.print('0');
   SERIAL_DEBUG.print(data, HEX);
 }
-void dumpPacketToDebug(char indicator, PacketStruct *buffer)
+void dumpPacketToDebug(char indicator, PacketMeta *meta)
 {
   //Filter on selected commands
   //if ((buffer->command & 0x0F) != COMMAND::Timing)    return;
+
+  PacketHeader *header = (PacketHeader *)(meta+1);
 
   SERIAL_DEBUG.print(millis());
   SERIAL_DEBUG.print(':');
@@ -154,19 +137,19 @@ void dumpPacketToDebug(char indicator, PacketStruct *buffer)
   SERIAL_DEBUG.print(indicator);
 
   SERIAL_DEBUG.print(':');
-  dumpByte(buffer->start_address);
+  dumpByte(header->start);
   SERIAL_DEBUG.print('-');
-  dumpByte(buffer->end_address);
+  dumpByte(header->start+header->cells);
   SERIAL_DEBUG.print('/');
-  dumpByte(buffer->hops);
+  dumpByte(header->hops);
   SERIAL_DEBUG.print('/');
-  dumpByte(buffer->command);
+  dumpByte(header->command);
   SERIAL_DEBUG.print(' ');
 
   //TODO: Could store these in PROGMEM char array
-  switch (buffer->command & 0x0F)
+  switch (header->command & 0x0F)
   {
-  case COMMAND::ResetBadPacketCounter:
+  case COMMAND::ResetPacketCounters:
     SERIAL_DEBUG.print(F("ResetC   "));
     break;
   case COMMAND::ReadVoltageAndStatus:
@@ -178,8 +161,8 @@ void dumpPacketToDebug(char indicator, PacketStruct *buffer)
   case COMMAND::ReadTemperature:
     SERIAL_DEBUG.print(F("RdTemp   "));
     break;
-  case COMMAND::ReadBadPacketCounter:
-    SERIAL_DEBUG.print(F("RdBadPkC "));
+  case COMMAND::ReadPacketCounters:
+    SERIAL_DEBUG.print(F("RdPkC "));
     break;
   case COMMAND::ReadSettings:
     SERIAL_DEBUG.print(F("RdSettin "));
@@ -196,27 +179,23 @@ void dumpPacketToDebug(char indicator, PacketStruct *buffer)
   case COMMAND::ReadBalanceCurrentCounter:
     SERIAL_DEBUG.print(F("Bal mAh  "));
     break;
-  case COMMAND::ReadPacketReceivedCounter:
-    SERIAL_DEBUG.print(F("PktRvd   "));
-    break;
+  case COMMAND::WriteBalanceLevel:
+    SERIAL_DEBUG.print(F("SetBal  "));
   default:
     SERIAL_DEBUG.print(F("??????   "));
     break;
   }
 
-  SERIAL_DEBUG.printf("%.4X", buffer->sequence);
-  //SERIAL_DEBUG.print(buffer->sequence, HEX);
+  SERIAL_DEBUG.printf("%.1X", header->sequence);
+  //SERIAL_DEBUG.print(header->sequence, HEX);
   SERIAL_DEBUG.print('=');
-  for (size_t i = 0; i < maximum_cell_modules_per_packet; i++)
+  uint8_t *data = (uint8_t *)(header+1);
+  for (size_t i = 0; i < meta->dataLen; i++,data++)
   {
-    //SERIAL_DEBUG.print(buffer->moduledata[i], HEX);
-    SERIAL_DEBUG.printf("%.4X", buffer->moduledata[i]);
+    //SERIAL_DEBUG.print(header->moduledata[i], HEX);
+    SERIAL_DEBUG.printf("%.2X", data);
     SERIAL_DEBUG.print(" ");
   }
-  SERIAL_DEBUG.print("=");
-  //SERIAL_DEBUG.print(buffer->crc, HEX);
-  SERIAL_DEBUG.printf("%.4X", buffer->crc);
-
   SERIAL_DEBUG.println();
 }
 
@@ -291,19 +270,7 @@ void serviceReplyQueue()
 
   while (!replyQueue.isEmpty())
   {
-    PacketStruct ps;
-    replyQueue.pop(&ps);
-
-#if defined(PACKET_LOGGING_RECEIVE)
-    // Process decoded incoming packet
-    dumpPacketToDebug('R', &ps);
-#endif
-
-    if (receiveProc.ProcessReply(&ps))
-    {
-      //Success, do nothing
-    }
-    else
+    if (! processOnePacket())
     {
       SERIAL_DEBUG.print(F("*FAIL*"));
       dumpPacketToDebug('F', &ps);
@@ -311,61 +278,25 @@ void serviceReplyQueue()
   }
 }
 
-void onPacketReceived()
-{
 
-  hal.GreenLedOn();
-
-  PacketStruct ps;
-  memcpy(&ps, SerialPacketReceiveBuffer, sizeof(PacketStruct));
-
-  if ((ps.command & 0x0F) == COMMAND::Timing)
-  {
-    //Timestamp at the earliest possible moment
-    uint32_t t = millis();
-    ps.moduledata[2] = (t & 0xFFFF0000) >> 16;
-    ps.moduledata[3] = t & 0x0000FFFF;
-    //Ensure CRC is correct
-    ps.crc = CRC16::CalculateArray((uint8_t *)&ps, sizeof(PacketStruct) - 2);
-  }
-
-  if (!replyQueue.push(&ps))
-  {
-    SERIAL_DEBUG.println(F("*Failed to queue reply*"));
-  }
-
-  //#if defined(PACKET_LOGGING_RECEIVE)
-  // Process decoded incoming packet
-  //dumpPacketToDebug('Q', &ps);
-  //#endif
-
-  hal.GreenLedOff();
-}
+static uint16_t serialDelay = 0;
 
 void timerTransmitCallback()
 {
+  // take 100 msec off the last packet's delay requirement
+  if (serialDelay) {
+    if (serialDelay > 100)
+      serialDelay -= 100;
+    else
+      serialDelay = 0;
+    return;
+  }
   if (requestQueue.isEmpty())
     return;
 
-  // Called to transmit the next packet in the queue need to ensure this procedure
-  // is called more frequently than items are added into the queue
-
-  PacketStruct transmitBuffer;
-
-  requestQueue.pop(&transmitBuffer);
-  sequence++;
-  transmitBuffer.sequence = sequence;
-
-  if (transmitBuffer.command == COMMAND::Timing)
-  {
-    //Timestamp at the last possible moment
-    uint32_t t = millis();
-    transmitBuffer.moduledata[0] = (t & 0xFFFF0000) >> 16;
-    transmitBuffer.moduledata[1] = t & 0x0000FFFF;
-  }
-
-  transmitBuffer.crc = CRC16::CalculateArray((uint8_t *)&transmitBuffer, sizeof(PacketStruct) - 2);
-  myPacketSerial.sendBuffer((byte *)&transmitBuffer);
+  // Remember to not transmit the next packet until this one has cleared
+  // the link
+  serialDelay = transmitOnePacket();
 
 // Output the packet we just transmitted to debug console
 #if defined(PACKET_LOGGING_SEND)
@@ -598,15 +529,15 @@ void timerEnqueueCallback()
     }
 
     //Need to watch overflow of the uint8 here...
-    prg.sendCellVoltageRequest(startmodule, endmodule);
-    prg.sendCellTemperatureRequest(startmodule, endmodule);
+    transmitProc.sendCellVoltageRequest(startmodule, endmodule);
+    transmitProc.sendCellTemperatureRequest(startmodule, endmodule);
 
     //If any module is in bypass then request PWM reading for whole bank
     for (uint8_t m = startmodule; m <= endmodule; m++)
     {
       if (cmi[m].inBypass)
       {
-        prg.sendReadBalancePowerRequest(startmodule, endmodule);
+        transmitProc.sendReadBalancePowerRequest(startmodule, endmodule);
         //We only need 1 reading for whole bank
         break;
       }
@@ -848,7 +779,7 @@ void onWifiConnect(const WiFiEventStationModeGotIP &event)
   */
   if (!server_running)
   {
-    DIYBMSServer::StartServer(&server, &mysettings, &sdcard_callback, &prg, &receiveProc, &ControlState, &rules, &sdcardaction_callback);
+    DIYBMSServer::StartServer(&server, &mysettings, &sdcard_callback, &transmitProc, &receiveProc, &ControlState, &rules, &sdcardaction_callback);
     server_running = true;
   }
 
@@ -924,7 +855,7 @@ void sendMqttStatus()
 
   // Set error flag if we have attempted to send 2*number of banks without a reply
   root["commserr"] = receiveProc.HasCommsTimedOut() ? 1 : 0;
-  root["sent"] = prg.packetsGenerated;
+  root["sent"] = transmitProc.packetsGenerated;
   root["received"] = receiveProc.packetsReceived;
   root["badcrc"] = receiveProc.totalCRCErrors;
   root["ignored"] = receiveProc.totalNotProcessedErrors;
@@ -1176,7 +1107,7 @@ void timerLazyCallback()
   if (lazyTimerMode == 1)
   {
     //Send a "ping" message through the cells to get a round trip time
-    prg.sendTimingRequest();
+    transmitProc.sendTimingRequest();
     return;
   }
 
@@ -1194,7 +1125,7 @@ void timerLazyCallback()
           return;
         }
 
-        prg.sendGetSettingsRequest(module);
+        transmitProc.sendGetSettingsRequest(module);
         counter++;
       }
     }
@@ -1221,15 +1152,15 @@ void timerLazyCallback()
     switch (lazyTimerMode)
     {
     case 3:
-      prg.sendReadBalanceCurrentCountRequest(startmodule, endmodule);
+      transmitProc.sendReadBalanceCurrentCountRequest(startmodule, endmodule);
       break;
 
     case 4:
-      prg.sendReadPacketsReceivedRequest(startmodule, endmodule);
+      transmitProc.sendReadPacketsReceivedRequest(startmodule, endmodule);
       break;
 
     case 5:
-      prg.sendReadBadPacketCounter(startmodule, endmodule);
+      transmitProc.sendReadBadPacketCounter(startmodule, endmodule);
       break;
     }
 
@@ -1487,7 +1418,7 @@ void setup()
   //D8 = GPIO15 = TRANSMIT SERIAL
   SERIAL_DATA.swap();
 
-  myPacketSerial.begin(&SERIAL_DATA, &onPacketReceived, sizeof(PacketStruct), SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer));
+  initSerializer();
 
   //Temporarly force WIFI settings
   //wifi_eeprom_settings xxxx;
@@ -1541,12 +1472,12 @@ void setup()
     //Process rules every 5 seconds
     myTimerRelay.attach(5, timerProcessRules);
 
-    //We process the transmit queue every 1 second (this needs to be lower delay than the queue fills)
-    //and slower than it takes a single module to process a command (about 200ms @ 2400baud)
-    myTransmitTimer.attach(1, timerTransmitCallback);
+    // We process the transmit queue every 1/10th second. The transmitter
+    // takes care not to overrun the serial link.
+    myTransmitTimer.attach(0.1, timerTransmitCallback);
 
     //Service reply queue
-    myReplyTimer.attach(1, serviceReplyQueue);
+    myReplyTimer.attach(0.1, serviceReplyQueue);
 
     //This is a lazy timer for low priority tasks
     myLazyTimer.attach(8, timerLazyCallback);
