@@ -10,6 +10,10 @@ The hardware is unmodified.
 
 ## Changes
 
+### ESP8266
+
+The ESP8266 code languished in a separate archive. Support for it has been restored.
+
 ### Packet format
 
 We now use variable-length *streamed* data packets. The idea is that a
@@ -37,6 +41,13 @@ controller.
 ### Standard CRC
 
 We now use a "standard" CRC library.
+
+### EEPROM checksum
+
+"Factory reset" zeroed the checksum. But what if it was zero originally?
+Fix: We simply increment it. Nobody is going to do 65536 factory resets in
+a row. Also, we zero the first byte which really should contain a version
+number.
 
 ## Future Changes
 

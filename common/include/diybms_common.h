@@ -32,20 +32,13 @@ struct PacketHeader
   unsigned int sequence:3;
 } __attribute__((packed));
 
-struct ReadConfigData
-{
-    uint16_t boardVersion;
-    uint16_t bypassTemp;
-    uint16_t bypassThreshold;
-    uint8_t numSamples;
-    uint8_t loadResistance;
-    uint32_t voltageCalibration;
-    uint32_t gitVersion; 
-} __attribute__((__packed__));
-
+union FLOAT_UINT {
+  float f;
+  uint32_t u;
+};
 
 struct PacketRequestConfig {
-  uint32_t calibration;
+  FLOAT_UINT voltageCalibration;
   uint16_t bypassTemp;
   uint16_t bypassThresh;
 } __attribute__((packed));
@@ -71,7 +64,7 @@ struct PacketReplySettings {
   uint16_t bypassVoltRaw;
   uint8_t numSamples;
   uint8_t loadResRaw;
-  uint32_t calibration; 
+  FLOAT_UINT voltageCalibration; 
   uint32_t gitVersion;  
 } __attribute__((packed));
 
@@ -88,11 +81,10 @@ union PacketRequestAny {
 
 // collect all possible response data. Used to auto-size the buffer.
 union PacketResponseAny {
-  struct ReadConfigData config;
+  struct PacketReplySettings config;
   struct PacketReplyVoltages voltages;
   struct PacketReplyTemperature temperatures;
   struct PacketReplyCounters counters;
-  struct PacketReplySettings settings;
 };
 
 //

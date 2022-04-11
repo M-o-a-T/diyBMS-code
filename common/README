@@ -1,0 +1,2 @@
+This directory contains code common to both controller and modules,
+i.e. serial-protocol specific types and such.
