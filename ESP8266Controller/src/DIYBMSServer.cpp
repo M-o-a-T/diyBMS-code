@@ -45,11 +45,12 @@ String DIYBMSServer::UUIDString;
 
 sdcard_info (*DIYBMSServer::_sdcardcallback)() = 0;
 void (*DIYBMSServer::_sdcardaction_callback)(uint8_t action) = 0;
-PacketRequestGenerator *DIYBMSServer::_prg = 0;
+PacketRequestGenerator *DIYBMSServer::_transmitProc = 0;
 PacketReceiveProcessor *DIYBMSServer::_receiveProc = 0;
 diybms_eeprom_settings *DIYBMSServer::_mysettings = 0;
 Rules *DIYBMSServer::_rules = 0;
 ControllerState *DIYBMSServer::_controlState = 0;
+HAL *DIYBMSServer::_hal = 0;
 
 #define REBOOT_COUNT_DOWN 2000
 
@@ -154,8 +155,8 @@ void DIYBMSServer::resetCounters(AsyncWebServerRequest *request)
     return;
 
   //Ask modules to reset bad packet counters
-  _prg->sendBadPacketCounterReset();
-  _prg->sendResetBalanceCurrentCounter();
+  _transmitProc->sendResetPacketCounters();
+  _transmitProc->sendResetBalanceCurrentCounter();
 
   for (uint8_t i = 0; i < maximum_controller_cell_modules; i++)
   {
@@ -166,7 +167,7 @@ void DIYBMSServer::resetCounters(AsyncWebServerRequest *request)
   //Reset internal counters on CONTROLLER
   _receiveProc->ResetCounters();
 
-  _prg->packetsGenerated = 0;
+  _transmitProc->packetsGenerated = 0;
 
   SendSuccess(request);
 }
@@ -500,14 +501,14 @@ void DIYBMSServer::saveGlobalSetting(AsyncWebServerRequest *request)
   {
 
     AsyncWebParameter *p1 = request->getParam("BypassOverTempShutdown", true);
-    _mysettings->BypassOverTempShutdown = p1->value().toInt();
+    _mysettings->BypassMaxTemp = p1->value().toInt();
 
     AsyncWebParameter *p2 = request->getParam("BypassThresholdmV", true);
     _mysettings->BypassThresholdmV = p2->value().toInt();
 
     saveConfiguration();
 
-    _prg->sendSaveGlobalSetting(_mysettings->BypassThresholdmV, _mysettings->BypassOverTempShutdown);
+    _transmitProc->sendSaveGlobalSetting(_mysettings->BypassThresholdmV, _mysettings->BypassMaxTemp);
 
     uint8_t totalModules = _mysettings->totalNumberOfBanks * _mysettings->totalNumberOfSeriesModules;
 
@@ -515,8 +516,8 @@ void DIYBMSServer::saveGlobalSetting(AsyncWebServerRequest *request)
     {
       if (cmi[i].valid)
       {
-        cmi[i].BypassThresholdmV = _mysettings->BypassThresholdmV;
-        cmi[i].BypassOverTempShutdown = _mysettings->BypassOverTempShutdown;
+        cmi[i].BypassConfigThresholdmV = _mysettings->BypassThresholdmV;
+        cmi[i].BypassMaxTemp = _mysettings->BypassMaxTemp;
       }
     }
 
@@ -552,7 +553,7 @@ void DIYBMSServer::saveSetting(AsyncWebServerRequest *request)
     else
     {
 
-      uint8_t BypassOverTempShutdown = 0xFF;
+      uint8_t BypassMaxTemp = 0xFF;
       uint16_t BypassThresholdmV = 0xFFFF;
 
       // Resistance of bypass load
@@ -569,7 +570,7 @@ void DIYBMSServer::saveSetting(AsyncWebServerRequest *request)
       if (request->hasParam("BypassOverTempShutdown", true))
       {
         AsyncWebParameter *p1 = request->getParam("BypassOverTempShutdown", true);
-        BypassOverTempShutdown = p1->value().toInt();
+        BypassMaxTemp = p1->value().toInt();
       }
 
       if (request->hasParam("BypassThresholdmV", true))
@@ -583,7 +584,7 @@ void DIYBMSServer::saveSetting(AsyncWebServerRequest *request)
         Calibration = p1->value().toFloat();
       }
 
-      _prg->sendSaveSetting(m, BypassThresholdmV, BypassOverTempShutdown, Calibration);
+      _transmitProc->sendSaveSetting(m, BypassThresholdmV, BypassMaxTemp, Calibration);
 
       clearModuleValues(m);
 
@@ -705,7 +706,7 @@ void DIYBMSServer::settings(AsyncWebServerRequest *request)
   settings["totalseriesmodules"] = _mysettings->totalNumberOfSeriesModules;
 
   settings["bypassthreshold"] = _mysettings->BypassThresholdmV;
-  settings["bypassovertemp"] = _mysettings->BypassOverTempShutdown;
+  settings["bypassovertemp"] = _mysettings->BypassMaxTemp;
 
   settings["NTPServerName"] = _mysettings->ntpServer;
   settings["TimeZone"] = _mysettings->timeZone;
@@ -798,7 +799,7 @@ void DIYBMSServer::identifyModule(AsyncWebServerRequest *request)
     }
     else
     {
-      _prg->sendIdentifyModuleRequest(c);
+      _transmitProc->sendIdentifyModuleRequest(c);
       SendSuccess(request);
     }
   }
@@ -823,7 +824,7 @@ void DIYBMSServer::modules(AsyncWebServerRequest *request)
 
     if (cmi[c].settingsCached == false)
     {
-      _prg->sendGetSettingsRequest(c);
+      _transmitProc->sendGetSettingsRequest(c);
     }
 
     AsyncResponseStream *response = request->beginResponseStream("application/json");
@@ -843,8 +844,8 @@ void DIYBMSServer::modules(AsyncWebServerRequest *request)
 
     if (cmi[c].settingsCached)
     {
-      settings["BypassOverTempShutdown"] = cmi[c].BypassOverTempShutdown;
-      settings["BypassThresholdmV"] = cmi[c].BypassThresholdmV;
+      settings["BypassOverTempShutdown"] = cmi[c].BypassMaxTemp;
+      settings["BypassThresholdmV"] = cmi[c].BypassConfigThresholdmV;
       settings["LoadRes"] = cmi[c].LoadResistance;
       settings["Calib"] = cmi[c].Calibration;
       settings["mVPerADC"] = cmi[c].mVPerADC;
@@ -951,7 +952,7 @@ void DIYBMSServer::monitor2(AsyncWebServerRequest *request)
 
   PrintStreamComma(response, F("{\"banks\":"), _mysettings->totalNumberOfBanks);
   PrintStreamComma(response, F("\"seriesmodules\":"), _mysettings->totalNumberOfSeriesModules);
-  PrintStreamComma(response, F("\"sent\":"), _prg->packetsGenerated);
+  PrintStreamComma(response, F("\"sent\":"), _transmitProc->packetsGenerated);
   PrintStreamComma(response, F("\"received\":"), _receiveProc->packetsReceived);
   PrintStreamComma(response, F("\"modulesfnd\":"), _receiveProc->totalModulesFound);
   PrintStreamComma(response, F("\"badcrc\":"), _receiveProc->totalCRCErrors);
@@ -1254,20 +1255,22 @@ void DIYBMSServer::SetCacheAndETag(AsyncWebServerResponse *response, String ETag
 void DIYBMSServer::StartServer(AsyncWebServer *webserver,
                                diybms_eeprom_settings *mysettings,
                                sdcard_info (*sdcardcallback)(),
-                               PacketRequestGenerator *prg,
+                               PacketRequestGenerator *pkttransmitproc,
                                PacketReceiveProcessor *pktreceiveproc,
                                ControllerState *controlState,
                                Rules *rules,
-                               void (*sdcardaction_callback)(uint8_t action))
+                               void (*sdcardaction_callback)(uint8_t action),
+                               HAL *hal)
 {
   _myserver = webserver;
-  _prg = prg;
+  _transmitProc = pkttransmitproc;
   _controlState = controlState;
   _rules = rules;
   _sdcardcallback = sdcardcallback;
   _mysettings = mysettings;
   _receiveProc = pktreceiveproc;
   _sdcardaction_callback = sdcardaction_callback;
+  _hal = hal;
 
   String cookieValue = "DIYBMS_XSS=";
   cookieValue += DIYBMSServer::UUIDString;

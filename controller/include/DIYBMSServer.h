@@ -41,7 +41,7 @@ public:
 #else
                             sdcard_info (*sdcardcallback)(),
 #endif
-                            PacketRequestGenerator *prg,
+                            PacketRequestGenerator *pkttransmitproc,
                             PacketReceiveProcessor *pktreceiveproc,
                             ControllerState *controlState,
                             Rules *rules,
@@ -63,7 +63,7 @@ private:
     static sdcard_info (*_sdcardcallback)();
 #endif
     static void (*_sdcardaction_callback)(uint8_t action);
-    static PacketRequestGenerator *_prg;
+    static PacketRequestGenerator *_transmitProc;
     static PacketReceiveProcessor *_receiveProc;
     static diybms_eeprom_settings *_mysettings;
     static Rules *_rules;
@@ -72,7 +72,11 @@ private:
 
     static void saveConfiguration()
     {
+#ifdef ESP32
         Settings::WriteConfig("diybms", (char *)_mysettings, sizeof(diybms_eeprom_settings));
+#else
+        Settings::WriteConfigToEEPROM((char *)_mysettings, sizeof(diybms_eeprom_settings), EEPROM_SETTINGS_START_ADDRESS);
+#endif
     }
 #ifdef ESP32
     static void PrintStreamCommaFloat(AsyncResponseStream *response, const char *text, float value);
@@ -167,10 +171,11 @@ extern void CurrentMonitorSetBasicSettings(uint16_t shuntmv, uint16_t shuntmaxcu
 extern void CurrentMonitorSetAdvancedSettings(currentmonitoring_struct newvalues);
 extern void CurrentMonitorSetRelaySettings(currentmonitoring_struct newvalues);
 
-extern diybms_eeprom_settings mysettings;
 #else
 extern bool OutputsEnabled;
 extern bool InputsEnabled;
 #endif // ESP32
+
+extern diybms_eeprom_settings mysettings;
 
 #endif // guard

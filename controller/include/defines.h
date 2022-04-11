@@ -64,6 +64,10 @@ enum VictronDVCC : uint8_t
 //Version 4.XX of DIYBMS modules operate at 5000 baud (since 26 Jan 2021)
 //#define COMMS_BAUD_RATE 5000
 
+#ifdef ESP8266
+#define EEPROM_SETTINGS_START_ADDRESS 256
+#endif
+
 enum enumInputState : uint8_t
 {
   INPUT_HIGH = 0xFF,
@@ -175,11 +179,19 @@ struct diybms_eeprom_settings
 
   bool influxdb_enabled;
   //uint16_t influxdb_httpPort;
+#ifdef ESP32
   char influxdb_serverurl[128 + 1];
   char influxdb_databasebucket[64 + 1];
   char influxdb_apitoken[128 + 1];
   char influxdb_orgid[128 + 1];
   uint8_t influxdb_loggingFreqSeconds;
+#else
+  uint16_t influxdb_httpPort;
+  char influxdb_host[64 + 1];
+  char influxdb_database[32 + 1];
+  char influxdb_user[32 + 1];
+  char influxdb_password[32 + 1];
+#endif
 };
 
 class CellModuleInfo

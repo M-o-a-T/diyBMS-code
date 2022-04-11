@@ -1,6 +1,11 @@
 #ifndef SERIALIZER_H
 #define SERIALIZER_H
 
+#include <SerialPacker.h>
+#include <cppQueue.h>
+#include "PacketRequestGenerator.h"
+#include "PacketReceiveProcessor.h"
+
 extern SerialPacker myPacketSerial;
 
 extern cppQueue requestQueue;
@@ -16,6 +21,6 @@ extern uint16_t sequence;
 // returns #bytes, including expected results
 void initSerializer();
 uint16_t transmitOnePacket();
-void processOnePacket();
+bool receiveOnePacket();
 
 #endif // guard

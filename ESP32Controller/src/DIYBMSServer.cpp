@@ -48,7 +48,7 @@ String DIYBMSServer::UUIDStringLast2Chars;
 
 fs::SDFS *DIYBMSServer::_sdcard = 0;
 void (*DIYBMSServer::_sdcardaction_callback)(uint8_t action) = 0;
-PacketRequestGenerator *DIYBMSServer::_prg = 0;
+PacketRequestGenerator *DIYBMSServer::_transmitProc = 0;
 PacketReceiveProcessor *DIYBMSServer::_receiveProc = 0;
 diybms_eeprom_settings *DIYBMSServer::_mysettings = 0;
 Rules *DIYBMSServer::_rules = 0;
@@ -567,7 +567,7 @@ void DIYBMSServer::resetCounters(AsyncWebServerRequest *request)
 
   // Ask modules to reset bad packet counters
   // If this fails, queue could be full so return error
-  if (_prg->sendResetPacketCounters() && _prg->sendResetBalanceCurrentCounter())
+  if (_transmitProc->sendResetPacketCounters() && _transmitProc->sendResetBalanceCurrentCounter())
   {
 
     canbus_messages_failed_sent = 0;
@@ -583,7 +583,7 @@ void DIYBMSServer::resetCounters(AsyncWebServerRequest *request)
     // Reset internal counters on CONTROLLER
     _receiveProc->ResetCounters();
 
-    _prg->ResetCounters();
+    _transmitProc->ResetCounters();
 
     SendSuccess(request);
   }
@@ -1275,7 +1275,7 @@ void DIYBMSServer::saveGlobalSetting(AsyncWebServerRequest *request)
     AsyncWebParameter *p2 = request->getParam("BypassThresholdmV", true);
     _mysettings->BypassThresholdmV = p2->value().toInt();
 
-    if (_prg->sendSaveGlobalSetting(_mysettings->BypassThresholdmV, _mysettings->BypassMaxTemp))
+    if (_transmitProc->sendSaveGlobalSetting(_mysettings->BypassThresholdmV, _mysettings->BypassMaxTemp))
     {
       saveConfiguration();
 
@@ -1359,7 +1359,7 @@ void DIYBMSServer::saveSetting(AsyncWebServerRequest *request)
         Calibration = p1->value().toFloat();
       }
 
-      _prg->sendSaveSetting(m, BypassThresholdmV, BypassOverTempShutdown, Calibration);
+      _transmitProc->sendSaveSetting(m, BypassThresholdmV, BypassOverTempShutdown, Calibration);
 
       clearModuleValues(m);
 
@@ -1806,7 +1806,7 @@ void DIYBMSServer::identifyModule(AsyncWebServerRequest *request)
     }
     else
     {
-      _prg->sendIdentifyModuleRequest(c);
+      _transmitProc->sendIdentifyModuleRequest(c);
       SendSuccess(request);
     }
   }
@@ -1890,7 +1890,7 @@ void DIYBMSServer::modules(AsyncWebServerRequest *request)
 
     if (cmi[c].settingsCached == false)
     {
-      _prg->sendGetSettingsRequest(c);
+      _transmitProc->sendGetSettingsRequest(c);
     }
 
     AsyncResponseStream *response = request->beginResponseStream("application/json");
@@ -2054,14 +2054,14 @@ void DIYBMSServer::monitor2(AsyncWebServerRequest *request)
 
   PrintStreamComma(response, "{\"banks\":", _mysettings->totalNumberOfBanks);
   PrintStreamComma(response, "\"seriesmodules\":", _mysettings->totalNumberOfSeriesModules);
-  PrintStreamComma(response, "\"sent\":", _prg->packetsGenerated);
+  PrintStreamComma(response, "\"sent\":", _transmitProc->packetsGenerated);
   PrintStreamComma(response, "\"received\":", _receiveProc->packetsReceived);
   PrintStreamComma(response, "\"modulesfnd\":", _receiveProc->totalModulesFound);
   PrintStreamComma(response, "\"badcrc\":", _receiveProc->totalCRCErrors);
   PrintStreamComma(response, "\"ignored\":", _receiveProc->totalNotProcessedErrors);
   PrintStreamComma(response, "\"roundtrip\":", _receiveProc->packetTimerMillisecond);
   PrintStreamComma(response, "\"oos\":", _receiveProc->totalOutofSequenceErrors);
-  PrintStreamComma(response, "\"qlen\":", _prg->queueLength());
+  PrintStreamComma(response, "\"qlen\":", _transmitProc->queueLength());
 
   PrintStreamComma(response, "\"activerules\":", _rules->active_rule_count);
   PrintStreamComma(response, "\"uptime\":", (uint32_t)(esp_timer_get_time() / (uint64_t)1e+6));
@@ -2410,7 +2410,7 @@ void DIYBMSServer::SetCacheAndETag(AsyncWebServerResponse *response, String ETag
 void DIYBMSServer::StartServer(AsyncWebServer *webserver,
                                diybms_eeprom_settings *mysettings,
                                fs::SDFS *sdcard,
-                               PacketRequestGenerator *prg,
+                               PacketRequestGenerator *transmitproc,
                                PacketReceiveProcessor *pktreceiveproc,
                                ControllerState *controlState,
                                Rules *rules,
@@ -2419,7 +2419,7 @@ void DIYBMSServer::StartServer(AsyncWebServer *webserver,
 {
   _myserver = webserver;
   _hal = hal;
-  _prg = prg;
+  _transmitProc = pkttransmitproc;
   _controlState = controlState;
   _rules = rules;
   _sdcard = sdcard;

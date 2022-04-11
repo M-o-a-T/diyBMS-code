@@ -6,6 +6,8 @@
 #include "PacketRequestGenerator.h"
 #include "PacketReceiveProcessor.h"
 
+#include "DIYBMSServer.h"
+
 SerialPacker myPacketSerial;
 
 // TODO: Move to RTOS queues instead
@@ -55,7 +57,7 @@ uint16_t transmitOnePacket()
 	return delay_ms;
 }
 
-bool processOnePacket()
+bool receiveOnePacket()
 {
 	PacketMeta *ps;
 	replyQueue.pop(&ps);

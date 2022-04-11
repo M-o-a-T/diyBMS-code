@@ -193,7 +193,7 @@ void dumpPacketToDebug(char indicator, PacketMeta *meta)
   for (size_t i = 0; i < meta->dataLen; i++,data++)
   {
     //SERIAL_DEBUG.print(header->moduledata[i], HEX);
-    SERIAL_DEBUG.printf("%.2X", data);
+    SERIAL_DEBUG.printf("%.2X", *data);
     SERIAL_DEBUG.print(" ");
   }
   SERIAL_DEBUG.println();
@@ -270,10 +270,10 @@ void serviceReplyQueue()
 
   while (!replyQueue.isEmpty())
   {
-    if (! processOnePacket())
+    if (! receiveOnePacket())
     {
       SERIAL_DEBUG.print(F("*FAIL*"));
-      dumpPacketToDebug('F', &ps);
+      //dumpPacketToDebug('F', &ps);
     }
   }
 }
@@ -344,12 +344,12 @@ void ProcessRules()
 
       if (cmi[cellid].valid && cmi[cellid].settingsCached)
       {
-        if (cmi[cellid].BypassThresholdmV != mysettings.BypassThresholdmV)
+        if (cmi[cellid].BypassConfigThresholdmV != mysettings.BypassThresholdmV)
         {
           rules.SetWarning(InternalWarningCode::ModuleInconsistantBypassVoltage);
         }
 
-        if (cmi[cellid].BypassOverTempShutdown != mysettings.BypassOverTempShutdown)
+        if (cmi[cellid].BypassMaxTemp!= mysettings.BypassMaxTemp)
         {
           rules.SetWarning(InternalWarningCode::ModuleInconsistantBypassTemperature);
         }
@@ -779,7 +779,7 @@ void onWifiConnect(const WiFiEventStationModeGotIP &event)
   */
   if (!server_running)
   {
-    DIYBMSServer::StartServer(&server, &mysettings, &sdcard_callback, &transmitProc, &receiveProc, &ControlState, &rules, &sdcardaction_callback);
+    DIYBMSServer::StartServer(&server, &mysettings, &sdcard_callback, &transmitProc, &receiveProc, &ControlState, &rules, &sdcardaction_callback, &hal);
     server_running = true;
   }
 
@@ -1016,7 +1016,7 @@ void LoadConfiguration()
   //Default to a single module
   mysettings.totalNumberOfBanks = 1;
   mysettings.totalNumberOfSeriesModules = 1;
-  mysettings.BypassOverTempShutdown = 65;
+  mysettings.BypassMaxTemp = 65;
   //4.10V bypass
   mysettings.BypassThresholdmV = 4100;
   mysettings.graph_voltagehigh = 4.5;
@@ -1156,11 +1156,7 @@ void timerLazyCallback()
       break;
 
     case 4:
-      transmitProc.sendReadPacketsReceivedRequest(startmodule, endmodule);
-      break;
-
-    case 5:
-      transmitProc.sendReadBadPacketCounter(startmodule, endmodule);
+      transmitProc.sendReadPacketCountersRequest(startmodule, endmodule);
       break;
     }
 
@@ -1169,7 +1165,7 @@ void timerLazyCallback()
     i += maximum_cell_modules_per_packet;
   }
 
-  if (lazyTimerMode >= 5)
+  if (lazyTimerMode >= 4)
   {
     //This must go on the last action for the lazyTimerMode to reset to zero
     lazyTimerMode = 0;

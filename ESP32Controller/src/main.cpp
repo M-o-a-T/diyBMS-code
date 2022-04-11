@@ -146,17 +146,6 @@ void LED(uint8_t bits)
   hal.Led(bits);
 }
 
-PacketMeta *allocatePacket(uint16_t size)
-{
-  PacketMeta *meta = (PacketMeta *)calloc(1, sizeof(struct PacketMeta)+sizeof(struct PacketHeader)+size);
-  meta->dataLen = size;
-  return meta;
-}
-void freePacket(PacketMeta *packet)
-{ 
-  free(packet);
-}
-
 // When triggered, the VOLTAGE and STATUS in the CellModuleInfo structure are accurate and consistent at this point in time.
 // Good point to apply rules and update screen/statistics
 void voltageandstatussnapshot_task(void *param)
@@ -985,7 +974,7 @@ void replyqueue_task(void *param)
 
     while (!replyQueue.isEmpty())
     {
-      if (!processOnePacket()
+      if (!receiveOnePacket())
       {
         // Error blue
         LED(RGBLED::Blue);
@@ -1020,7 +1009,7 @@ void transmit_task(void *param)
       vTaskDelay(pdMS_TO_TICKS(delay_wait));
 
     uint16_t delay_ms = transmitOnePacket();
-    vTaskDelay(pdMS_TO_TICKS(delay_ms - (millis()-t)));
+    vTaskDelay(pdMS_TO_TICKS(delay_ms));
   }
 }
 
