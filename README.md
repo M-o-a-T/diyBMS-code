@@ -49,6 +49,11 @@ Fix: We simply increment it. Nobody is going to do 65536 factory resets in
 a row. Also, we zero the first byte which really should contain a version
 number.
 
+### Modules on 5V
+
+When a programming adapter feeds 5V to a module but doesn't keep it in
+reset, turning the bypass on is not helpful.
+
 ## Future Changes
 
 ### CRC polynomial

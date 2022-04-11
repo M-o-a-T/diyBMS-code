@@ -15,6 +15,9 @@
 //Define maximum allowed temperature as safety cut off
 #define DIYBMS_MODULE_SafetyTemperatureCutoff 940 // ~90 degC for B~4000
 
+//Define programming voltage. If connected to 5V, "balancing" is pointless.
+#define DIYBMS_MODULE_ProgrammerVoltage 1000
+
 class PacketProcessor
 {
 public:
