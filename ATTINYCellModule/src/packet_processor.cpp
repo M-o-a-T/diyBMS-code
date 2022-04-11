@@ -43,7 +43,7 @@ bool PacketProcessor::BypassCheck()
 {
   uint16_t temp = raw_adc_voltage;
 
-  if (temp >= DIYBMS_MODULE_ProgrammerVoltage)
+  if (temp >= DIYBMS_MODULE_ProgrammerVoltage*SAMPLEAVERAGING)
     return false;  // we don't "balance" that
   if (bypassThreshold > 0 && temp > bypassThreshold)
     return true;  // temporary limit exceeded
