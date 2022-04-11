@@ -22,7 +22,8 @@ enum Rule : uint8_t
     BankOverVoltage = 11,
     BankUnderVoltage = 12,
     Timer2 = 13,
-    Timer1 = 14
+    Timer1 = 14,
+    //RELAY_RULES = 15
 };
 
 //Define a max constant for the highest value (change if you add more warnings)

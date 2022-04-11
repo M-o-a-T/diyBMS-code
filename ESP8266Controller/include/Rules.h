@@ -19,8 +19,8 @@ enum Rule : uint8_t
     PackOverVoltage = 8,
     PackUnderVoltage = 9,
     Timer2 = 10,
-    Timer1 = 11
-
+    Timer1 = 11,
+    //RELAY_RULES = 12
 };
 
 enum InternalWarningCode : uint8_t

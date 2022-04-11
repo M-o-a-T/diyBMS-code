@@ -103,7 +103,11 @@ enum CurrentMonitorDevice : uint8_t
 #endif
 
 //Number of rules as defined in Rules.h (enum Rule)
+#ifdef ESP32
 #define RELAY_RULES 15
+#else
+#define RELAY_RULES 12
+#endif
 
 //Number of relays on board (4)
 #define RELAY_TOTAL 4

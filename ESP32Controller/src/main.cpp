@@ -740,6 +740,10 @@ void ledoff_task(void *param)
   }
 }
 
+#if INPUTS_TOTAL != 7
+#error Number of inputs is wrong
+#endif
+
 void tca6408_isr_task(void *param)
 {
   for (;;)
