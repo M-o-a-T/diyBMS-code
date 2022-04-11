@@ -175,7 +175,6 @@ void PacketProcessor::onHeaderReceived(PacketHeader *header)
     // fall thru
   default:
     // do nothing. Just forward.
-  copy:
     serial->sendStartCopy(more);
     break;
 
@@ -209,7 +208,7 @@ void PacketProcessor::onHeaderReceived(PacketHeader *header)
     goto ok;
 
   case COMMAND::ReadSettings:
-    more = sizeof(struct ReadConfigData);
+    more = sizeof(struct PacketReplySettings);
     goto ok;
 
   case COMMAND::WriteSettings:
@@ -266,7 +265,6 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
     return;
   }
 
-  uint16_t val;
   switch (header->command)
   {
   case COMMAND::ReadVoltageAndStatus:
@@ -283,13 +281,13 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
 
   case COMMAND::ReadSettings:
     {
-      struct ReadConfigData rcd;
+      struct PacketReplySettings rcd;
       rcd.boardVersion = DIYBMSMODULEVERSION;
-      rcd.bypassTemp = _config->BypassTemperature;
-      rcd.bypassThreshold = _config->BypassThreshold;
-      rcd.loadResistance = (uint8_t)(LOAD_RESISTANCE*16);
+      rcd.bypassTempRaw = _config->BypassTemperature;
+      rcd.bypassVoltRaw = _config->BypassThreshold;
+      rcd.loadResRaw = (uint8_t)(LOAD_RESISTANCE*16);
       rcd.numSamples = SAMPLEAVERAGING;
-      rcd.voltageCalibration = _config->Calibration;
+      rcd.voltageCalibration.u = _config->Calibration;
       rcd.gitVersion = GIT_VERSION_B;
 
       serial->sendBuffer(&rcd,sizeof(rcd));
@@ -342,8 +340,8 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
 
       struct PacketRequestConfig *data = (PacketRequestConfig *)(header+1);
 
-      if(data->calibration)
-        _config->Calibration = data->calibration;
+      if(data->voltageCalibration.u)
+        _config->Calibration = data->voltageCalibration.u;
 
       if(data->bypassTemp) {
 #if defined(DIYBMSMODULEVERSION) && (DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20))

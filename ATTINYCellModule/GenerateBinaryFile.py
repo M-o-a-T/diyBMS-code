@@ -22,7 +22,7 @@ def generatejson(target, source, env):
     if (not os.path.exists(source)):
         raise Exception("Source file not found")
 
-    avrfolder = os.path.join(env.get('PROJECT_DIR'), '..', 'ESPController', 'data', 'avr')
+    avrfolder = os.path.join(env.get('PROJECT_DIR'), '..', 'ESP32Controller', 'data', 'avr')
 
     if (not os.path.exists(avrfolder)):
         os.mkdir(avrfolder)
