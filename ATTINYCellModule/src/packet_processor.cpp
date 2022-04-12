@@ -241,7 +241,9 @@ void PacketProcessor::onReadReceived(PacketHeader *header)
 {
   // unused for now, as no current command reads and writes data
   uint16_t more=0;
-
+Serial.write('H');
+Serial.print(header->command);
+Serial.write(' ');
   switch (header->command)
   {
   case COMMAND::WriteSettings:
@@ -250,7 +252,7 @@ void PacketProcessor::onReadReceived(PacketHeader *header)
     // fall through, though TODO actually no other commands should be seen
     // here in the first place
   default:
-    serial->sendStartFrame(more);
+    serial->sendStartCopy(more);
     break;
   }
 }
@@ -352,6 +354,9 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
   case COMMAND::WriteSettings:
     {
       CHECK_LEN(PacketRequestConfig);
+
+      serial->sendEndFrame(true);
+      Serial.println("\nModSettings");
 
       struct PacketRequestConfig *data = (PacketRequestConfig *)(header+1);
 
