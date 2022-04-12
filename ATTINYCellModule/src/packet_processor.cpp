@@ -181,7 +181,7 @@ void PacketProcessor::onHeaderReceived(PacketHeader *header)
     break;
 
   case COMMAND::Timing:
-    more = sizeof(uint32_t);
+    more = 0;
     goto ok;
 
   case COMMAND::Identify:
@@ -236,14 +236,15 @@ void PacketProcessor::onHeaderReceived(PacketHeader *header)
 //
 void PacketProcessor::onReadReceived(PacketHeader *header)
 {
-  switch (header->command & 0x0F)
+  uint16_t more=0;
+  switch (header->command)
   {
   case COMMAND::WriteSettings:
   case COMMAND::WriteBalanceLevel:
     header->seen = 1;
     // fall through
   default:
-    serial->sendStartFrame(0);
+    serial->sendStartFrame(more);
     break;
   }
 }
