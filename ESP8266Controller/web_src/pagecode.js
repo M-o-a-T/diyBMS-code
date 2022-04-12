@@ -147,7 +147,7 @@ function queryBMS() {
 
                 color = jsondata.bypasshot[i] == 1 ? red : stdcolor;
                 tempint.push({ value: jsondata.inttemp[i], itemStyle: { color: color } });
-                tempext.push({ value: (jsondata.exttemp[i] == -40 ? 0 : jsondata.exttemp[i]), itemStyle: { color: stdcolor } });
+                tempext.push({ value: (jsondata.exttemp[i] == -100 ? 0 : jsondata.exttemp[i]), itemStyle: { color: stdcolor } });
                 pwm.push({ value: jsondata.bypasspwm[i] == 0 ? null : Math.trunc(jsondata.bypasspwm[i] / 255 * 100) });
             }
         }

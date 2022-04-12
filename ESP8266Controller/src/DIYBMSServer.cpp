@@ -606,8 +606,8 @@ void DIYBMSServer::clearModuleValues(uint8_t module)
   cmi[module].badPacketCount = 0;
   cmi[module].inBypass = false;
   cmi[module].bypassOverTemp = false;
-  cmi[module].internalTemp = -40;
-  cmi[module].externalTemp = -40;
+  cmi[module].internalTemp = -100;
+  cmi[module].externalTemp = -100;
 }
 
 void DIYBMSServer::GetRules(AsyncWebServerRequest *request)
@@ -1063,7 +1063,7 @@ void DIYBMSServer::monitor2(AsyncWebServerRequest *request)
     if (i)
       response->print(comma);
 
-    if (cmi[i].valid && cmi[i].internalTemp != -40)
+    if (cmi[i].valid && cmi[i].internalTemp != -100)
     {
       response->print(cmi[i].internalTemp);
     }
@@ -1086,7 +1086,7 @@ void DIYBMSServer::monitor2(AsyncWebServerRequest *request)
     if (i)
       response->print(comma);
 
-    if (cmi[i].valid && cmi[i].externalTemp != -40)
+    if (cmi[i].valid && cmi[i].externalTemp != -100)
     {
       response->print(cmi[i].externalTemp);
     }

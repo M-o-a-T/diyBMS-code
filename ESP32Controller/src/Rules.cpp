@@ -67,7 +67,7 @@ void Rules::ProcessCell(uint8_t bank, uint8_t cellNumber, CellModuleInfo *c)
         address_LowestCellVoltage = cellNumber;
     }
 
-    if (c->externalTemp != -40)
+    if (c->externalTemp != -100)
     {
         //Record that we do have at least one external temperature sensor on a module
         moduleHasExternalTempSensor = true;
