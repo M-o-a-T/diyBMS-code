@@ -29,8 +29,8 @@ bool PacketReceiveProcessor::ProcessReply(PacketMeta *meta)
 
     totalModulesFound = _header->hops;
 
-    //Careful of overflowing the uint16_t in sequence
-    if (((_header->sequence - packetLastReceivedSequence) & 0x07)!= 1)
+    // The sequence number wraps.
+    if (((_header->sequence - packetLastReceivedSequence) & 0x07) != 1)
     {
       SERIAL_DEBUG.println();
       SERIAL_DEBUG.print(F("OOS Error, expected="));
