@@ -1114,7 +1114,7 @@ void timerLazyCallback()
     //Find modules that don't have settings cached and request them
     for (uint8_t module = 0; module < TotalNumberOfCells(); module++)
     {
-      if (cmi[module].valid && !cmi[module].settingsCached)
+      if (!cmi[module].settingsCached)
       {
         if (requestQueue.getRemainingCount() < 6)
         {
