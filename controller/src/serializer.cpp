@@ -18,7 +18,7 @@ PacketRequestGenerator transmitProc = PacketRequestGenerator(&requestQueue);
 PacketReceiveProcessor receiveProc = PacketReceiveProcessor();
 
 // Memory to hold one serial buffer
-uint8_t SerialPacketReceiveBuffer[sizeof(struct PacketHeader)+sizeof(union PacketResponseAny)* maximum_cell_modules_per_packet];
+uint8_t SerialPacketReceiveBuffer[sizeof(struct PacketHeader)+sizeof(union PacketResponseAny)* maximum_cell_modules_per_packet] __attribute__((aligned(4)));
 
 uint16_t sequence = 0;
 
