@@ -45,9 +45,9 @@ uint16_t transmitOnePacket()
 	// parity.
 	uint16_t delay_ms = ((8+len + (uint32_t)meta->dataExpect * (header->cells+1)) * 12)
 		* (uint32_t)1000 / mysettings.baudRate;
-    
+
     myPacketSerial.sendStartFrame(len);
-    myPacketSerial.sendBuffer(&header, sizeof(PacketHeader)+meta->dataLen);
+    myPacketSerial.sendBuffer(header, sizeof(PacketHeader)+meta->dataLen);
     
     // Add the timestamp
     if (header->command == COMMAND::Timing)   
