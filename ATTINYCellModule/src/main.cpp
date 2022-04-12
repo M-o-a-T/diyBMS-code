@@ -233,6 +233,10 @@ void setup()
   Serial.begin(BAUD, SERIAL_8N1);
 
   myPacketSerial.begin(&Serial, &onPacketHeader, &onReadReceived, &onPacketReceived, SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer), sizeof(PacketHeader));
+
+#ifdef SP_NONFRAME_STREAM
+  SP_NONFRAME_STREAM.println("Module Start");
+#endif
 }
 
 ISR(TIMER1_COMPA_vect)
