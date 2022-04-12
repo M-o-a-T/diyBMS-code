@@ -54,6 +54,7 @@ uint16_t transmitOnePacket()
       myPacketSerial.sendBuffer(&t,sizeof(t));
     
     myPacketSerial.sendEndFrame();
+	freePacket(meta);
 	return delay_ms;
 }
 
