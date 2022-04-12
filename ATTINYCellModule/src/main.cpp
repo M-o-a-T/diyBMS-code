@@ -244,11 +244,6 @@ ISR(TIMER1_COMPA_vect)
   // when v=192 (75%), the duration between on and off is 195.6ms (1.0187ms per interrupt) - on for 62.63ms, off for 30.83ms, 75.74% duty
   InterruptCounter++;
   PulsePeriod++;
-  //Reset at top
-  if (InterruptCounter == 255)
-  {
-    InterruptCounter = 0;
-  }
 
   //Switch the load on if the counter is below the SETPOINT
   if (InterruptCounter <= PP.PWMSetPoint)
