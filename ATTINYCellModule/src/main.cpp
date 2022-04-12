@@ -309,7 +309,7 @@ void loop()
     StopBalance();
   }
 
-  noInterrupts();
+  // ??? noInterrupts();
   if (!myPacketSerial.isIdle())
     DiyBMSATTiny841::NotificationLedOn();
 
@@ -321,13 +321,13 @@ void loop()
     myPID.clear();
 
     //Switch off TX - save power
-    DiyBMSATTiny841::DisableSerial0TX();
+    //DiyBMSATTiny841::DisableSerial0TX();
 
     //Wake up on Serial port RX
     DiyBMSATTiny841::EnableStartFrameDetection();
 
     //Program stops here until woken by watchdog or Serial port ISR
-    DiyBMSATTiny841::Sleep();
+    //DiyBMSATTiny841::Sleep();
   }
   //We are awake....
 

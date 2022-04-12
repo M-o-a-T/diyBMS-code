@@ -194,12 +194,13 @@ void DiyBMSATTiny841::BeginADCReading()
   // ADC requires a settling time of 1ms before measurements are stable
   delay(1);
 
-  noInterrupts();
-  ADCSRA |= _BV(ADSC) | _BV(ADIE);
+  //noInterrupts();
   set_sleep_mode(SLEEP_MODE_IDLE); // IDLE sleep during ADC sample, allowing counters and timers to work
   sleep_enable();
 
   // start the conversion
+  ADCSRA |= _BV(ADSC) | _BV(ADIE);
+  //interrupts();
   sleep_cpu();
   sleep_disable();
 
@@ -240,7 +241,8 @@ void DiyBMSATTiny841::Sleep()
   //Keep this alive
   //power_usart0_enable();
 
-  noInterrupts();
+  sei();
+  interrupts();
   sleep_enable();
   sleep_cpu();
 
