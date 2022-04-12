@@ -63,17 +63,12 @@ bool receiveOnePacket()
 	PacketMeta *ps;
 	replyQueue.pop(&ps);
 
-#if defined(PACKET_LOGGING_RECEIVE)
-// Process decoded incoming packet
-// dumpPacketToDebug('R', &ps);
-#endif
-
 	return receiveProc.ProcessReply(ps);
 }
 
 static void onPacketHeader()
 {
-	// a CRC error is a packet where onPacketReceived is not called
+	// a CRC error is a packet for which onPacketReceived is not called
 	receiveProc.pendingCRCErrors += 1;
 }
   
