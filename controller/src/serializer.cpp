@@ -98,7 +98,7 @@ static void onPacketReceived()
 	{
 		// ESP_LOGE(TAG, "Reply Q full");
 		receiveProc.totalNotProcessedErrors += 1; // TODO?
-		free(ps);
+		freePacket(ps);
 	}
 	// TODO turn green LED off
 }
