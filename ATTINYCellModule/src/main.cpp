@@ -296,6 +296,7 @@ inline void identifyModule()
   }
 }
 
+static uint8_t lpc=0;
 
 void loop()
 {
@@ -303,6 +304,7 @@ void loop()
   wdt_reset();
   identifyModule();
 
+  if(!++lpc) Serial.write('L');
   if (PP.SettingsHaveChanged)
   {
     //The configuration has just been modified so stop balancing if we are and reset our status
