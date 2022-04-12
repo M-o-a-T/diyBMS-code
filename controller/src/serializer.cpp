@@ -102,6 +102,6 @@ static void onPacketReceived()
 void initSerializer()
 {
     myPacketSerial.begin(&SERIAL_DATA, &onPacketHeader, nullptr, &onPacketReceived,
-		SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer));
+		SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer), sizeof(PacketHeader));
 
 }
