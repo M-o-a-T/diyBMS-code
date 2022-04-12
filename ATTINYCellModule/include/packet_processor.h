@@ -51,7 +51,7 @@ public:
   uint8_t identifyModule;
   bool BypassOverheatCheck();
 
-  int16_t InternalTemperature() {
+  inline int16_t InternalTemperature() {
     return raw_adc_onboard_temperature;
   }
 
