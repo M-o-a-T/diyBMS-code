@@ -211,13 +211,25 @@ bool PacketReceiveProcessor::ProcessReplyVoltage()
 bool PacketReceiveProcessor::ProcessReplySettings()
 {
   LOOP(PacketReplySettings) {
+    if(data->dataVersion > SETTINGS_VERSION) {
+        // ugh. We don't know anything. TODO: Mark this module as bad.
+        return false;
+    }
+    if(data->dataVersion < SETTINGS_VERSION) {
+        // TODO handle old protocol versions (assuming there are any)
+        return false;
+    }
+    cell->mVPerADC = (float)data->mvPerADC / (float)64;
     cell->BoardVersionNumber = data->boardVersion;
-    cell->BypassMaxTemp = cell->ThermistorToCelsius(data->bypassTempRaw);
-    cell->BypassConfigThresholdmV = cell->RawTomV(data->bypassVoltRaw);
     cell->voltageSamples = data->numSamples;
     cell->LoadResistance = (float)data->loadResRaw / 16.0;
     cell->Calibration = data->voltageCalibration.f;
+    cell->Internal_BCoefficient = data->BCoeffInternal;
+    cell->External_BCoefficient = data->BCoeffExternal;
     cell->CodeVersionNumber = data->gitVersion;
+    // calculations depend on previous values, so 
+    cell->BypassConfigThresholdmV = cell->RawTomV(data->bypassVoltRaw);
+    cell->BypassMaxTemp = cell->ThermistorToCelsius(data->bypassTempRaw);
 
     cell->settingsCached = true;
   }

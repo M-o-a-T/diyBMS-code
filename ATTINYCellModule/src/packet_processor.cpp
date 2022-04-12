@@ -293,10 +293,14 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
   case COMMAND::ReadSettings:
     {
       struct PacketReplySettings rcd;
+      rcd.dataVersion = SETTINGS_VERSION;
+      rcd.mvPerADC = (uint8_t)((float)MV_PER_ADC*(float)64);
       rcd.boardVersion = DIYBMSMODULEVERSION;
       rcd.bypassTempRaw = _config->BypassTemperature;
       rcd.bypassVoltRaw = _config->BypassThreshold;
       rcd.loadResRaw = (uint8_t)(LOAD_RESISTANCE*16);
+      rcd.BCoeffInternal = INT_BCOEFFICIENT;
+      rcd.BCoeffExternal = EXT_BCOEFFICIENT;
       rcd.numSamples = SAMPLEAVERAGING;
       rcd.voltageCalibration.u = _config->Calibration;
       rcd.gitVersion = GIT_VERSION_B;
@@ -354,17 +358,17 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
       if(data->voltageCalibration.u)
         _config->Calibration = data->voltageCalibration.u;
 
-      if(data->bypassTemp) {
+      if(data->bypassTempRaw) {
 #if DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20)
         //Keep temperature low for modules with R19 and R20 not swapped
-        if (data->bypassTemp > 715) // see main.cpp
-          data->bypassTemp = 715;
+        if (data->bypassTempRaw > 715) // see main.cpp
+          data->bypassTempRaw = 715;
 #endif
-        _config->BypassTemperature = data->bypassTemp;
+        _config->BypassTemperature = data->bypassTempRaw;
       }
 
-      if (data->bypassThresh)
-        _config->BypassThreshold = data->bypassThresh;
+      if (data->bypassVoltRaw)
+        _config->BypassThreshold = data->bypassVoltRaw;
 
       //Save settings
       Settings::WriteConfigToEEPROM((uint8_t *)_config, sizeof(CellModuleConfig), EEPROM_CONFIG_ADDRESS);

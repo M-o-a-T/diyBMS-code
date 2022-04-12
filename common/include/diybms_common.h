@@ -39,8 +39,8 @@ union FLOAT_UINT {
 
 struct PacketRequestConfig {
   FLOAT_UINT voltageCalibration;
-  uint16_t bypassTemp;
-  uint16_t bypassThresh;
+  uint16_t bypassTempRaw;
+  uint16_t bypassVoltRaw;
 } __attribute__((packed));
 
 struct PacketReplyVoltages {
@@ -58,14 +58,23 @@ struct PacketReplyCounters {
   uint16_t bad;
 } __attribute__((packed));
 
+#define SETTINGS_VERSION 1
 struct PacketReplySettings {
+// this header must not change
+  uint32_t gitVersion;  
   uint16_t boardVersion;
+  uint8_t dataVersion; // this is v1
+  uint8_t mvPerADC; // scaled 1/64
+// note that we're 4-byte aligned here
+
+// to prevent misalignment exceptions, put larger items first
+  FLOAT_UINT voltageCalibration; 
   uint16_t bypassTempRaw;
   uint16_t bypassVoltRaw;
+  uint16_t BCoeffInternal;
+  uint16_t BCoeffExternal;
   uint8_t numSamples;
   uint8_t loadResRaw;
-  FLOAT_UINT voltageCalibration; 
-  uint32_t gitVersion;  
 } __attribute__((packed));
 
 struct PacketRequestBalance {

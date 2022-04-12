@@ -18,8 +18,8 @@ bool PacketRequestGenerator::sendSaveGlobalSetting(uint16_t BypassThresholdmV, u
     cell->settingsCached = false;
 
     data->voltageCalibration.f = cell->Calibration;
-    data->bypassTemp = cell->CelsiusToThermistor(cell->BypassMaxTemp);
-    data->bypassThresh = cell->mVToRaw(cell->BypassConfigThresholdmV);
+    data->bypassTempRaw = cell->CelsiusToThermistor(cell->BypassMaxTemp);
+    data->bypassVoltRaw = cell->mVToRaw(cell->BypassConfigThresholdmV);
   }
 
   return pushPacketToQueue(meta);
@@ -41,8 +41,8 @@ bool PacketRequestGenerator::sendSaveSetting(uint8_t m, uint16_t BypassThreshold
   cell->settingsCached = false;
 
   data->voltageCalibration.f = cell->Calibration;
-  data->bypassTemp = cell->CelsiusToThermistor(cell->BypassMaxTemp);
-  data->bypassThresh = cell->mVToRaw(cell->BypassConfigThresholdmV);
+  data->bypassTempRaw = cell->CelsiusToThermistor(cell->BypassMaxTemp);
+  data->bypassVoltRaw = cell->mVToRaw(cell->BypassConfigThresholdmV);
 
   return pushPacketToQueue(meta);
 }
