@@ -253,20 +253,22 @@ void PacketProcessor::onReadReceived(PacketHeader *header)
     do { \
       if(serial->receiveCount() < sizeof(PacketHeader) + sizeof(type)) { \
         serial->sendEndFrame(true); \
+        Serial.write("\nM ERR BADLEN\n"); \
         return; \
       } \
     } while(0)
 
 void PacketProcessor::onPacketReceived(PacketHeader *header)
 {
-  uint8_t addr = header->hops;
-  badpackets += ((header->sequence - lastSequence) & 0x07) - 1;
-  lastSequence = header->sequence;
-
+  uint8_t addr = header->hops-1;
+  // was incremented in `onHeaderReceived`
   if(header->start > addr || header->start + header->cells < addr) {
     // Not for us. Done.
     return;
   }
+
+  badpackets += ((header->sequence - lastSequence) & 0x07) - 1;
+  lastSequence = header->sequence;
 
   switch (header->command)
   {
