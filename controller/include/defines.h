@@ -270,7 +270,7 @@ public:
     if(mVPerADC == 0) return 0;
     if(voltageSamples == 0) return 0;
     if(Calibration == 0) return 0;
-    return mV*mVPerADC*voltageSamples*Calibration;
+    return mV/mVPerADC*voltageSamples/Calibration;
   }
 
   inline float RawTomV(uint16_t raw) {
@@ -278,7 +278,7 @@ public:
     if(mVPerADC == 0) return 0;
     if(voltageSamples == 0) return 0;
     if(Calibration == 0) return 0;
-    return raw/mVPerADC/voltageSamples/Calibration;
+    return raw*mVPerADC/voltageSamples*Calibration;
   }
 };
 
