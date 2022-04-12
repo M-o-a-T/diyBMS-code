@@ -75,7 +75,7 @@ public:
 
    static void DumpLoadOn()
    {
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 440
+#if DIYBMSMODULEVERSION < 440
       //Pre 4.4 board
       PORTA |= _BV(PORTA3);
 #else
@@ -86,7 +86,7 @@ public:
 
    static void DumpLoadOff()
    {
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 440
+#if DIYBMSMODULEVERSION < 440
       //Pre 4.4 board
       PORTA &= (~_BV(PORTA3));
 #else
@@ -117,7 +117,7 @@ public:
       PORTA &= (~_BV(PORTA6));
    }
 
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 440
+#if DIYBMSMODULEVERSION < 440
    static void SparePinOn()
    {
       PORTB |= _BV(PORTB1);
@@ -129,7 +129,7 @@ public:
    }
 #endif
 
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 440
+#if DIYBMSMODULEVERSION < 440
    static void BlueLedOn()
    {
       PORTA |= _BV(PORTA5);
@@ -209,7 +209,7 @@ public:
 
    static void SelectCellVoltageChannel()
    {
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 440
+#if DIYBMSMODULEVERSION < 440
       //Pre 4.4 board
       //PB2 = ADC8 PIN 5 ARDUINO PIN 2/A8 = VOLTAGE reading
       //ADMUXA – ADC Multiplexer Selection Register A
@@ -242,7 +242,7 @@ public:
 //External sensor
 //ADMUXA – ADC Multiplexer Selection Register A
 
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 440
+#if DIYBMSMODULEVERSION < 440
       //ADC11 (single end) MUX[5:0] 00 1011
       //ADMUXA = (0 << MUX5) | (0 << MUX4) | (1 << MUX3) | (0 << MUX2) | (1 << MUX1) | (1 << MUX0);
       ADMUXA = B00001011;
@@ -254,7 +254,7 @@ public:
    }
 
    static void double_tap_Notification_led();
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 440
+#if DIYBMSMODULEVERSION < 440
    static void double_tap_blue_led();
 #endif
 };

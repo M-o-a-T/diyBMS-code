@@ -91,11 +91,11 @@ void PacketProcessor::ADCReading(uint16_t value)
     break;
 
   case ADC_INTERNAL_TEMP:
-#if (defined(DIYBMSMODULEVERSION) && (DIYBMSMODULEVERSION == 420 && defined(SWAPR19R20)))
+#if DIYBMSMODULEVERSION == 420 && defined(SWAPR19R20)
     //R19 and R20 swapped on V4.2 board, invert the thermistor reading
     //Reverted back to 1000 base value to fix issue https://github.com/stuartpittaway/diyBMSv4Code/issues/95
     raw_adc_onboard_temperature = 1000 - value;
-#elif (defined(DIYBMSMODULEVERSION) && (DIYBMSMODULEVERSION == 430 && defined(SWAPR19R20)))
+#elif DIYBMSMODULEVERSION == 430 && defined(SWAPR19R20)
     //R19 and R20 swapped on V4.3 board (never publically released), invert the thermistor reading
     raw_adc_onboard_temperature = 1000 - value;
 #else
@@ -346,7 +346,7 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
         _config->Calibration = data->voltageCalibration.u;
 
       if(data->bypassTemp) {
-#if defined(DIYBMSMODULEVERSION) && (DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20))
+#if DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20)
         //Keep temperature low for modules with R19 and R20 not swapped
         if (data->bypassTemp > 715) // see main.cpp
           data->bypassTemp = 715;

@@ -92,7 +92,7 @@ void DefaultConfig()
   //2mV per ADC resolution
   //myConfig.mVPerADC = 2.0; //2048.0/1024.0;
 
-#if defined(DIYBMSMODULEVERSION) && (DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20))
+#if DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20)
   //Keep temperature low for modules with R19 and R20 not swapped
   myConfig.BypassTemperature = 715; // 45 degC
 #else
@@ -163,7 +163,7 @@ void ValidateConfiguration()
     myConfig.BypassTemperature = DIYBMS_MODULE_SafetyTemperatureCutoff;
   }
 
-#if defined(DIYBMSMODULEVERSION) && (DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20))
+#if DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20)
   //Keep temperature low for modules with R19 and R20 not swapped
   if (myConfig.BypassTemperature > 715)
   {
@@ -220,7 +220,7 @@ void setup()
 
   DiyBMSATTiny841::double_tap_Notification_led();
 
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 430
+#if DIYBMSMODULEVERSION < 430
   DiyBMSATTiny841::double_tap_blue_led();
 #endif
 
@@ -277,7 +277,7 @@ inline void identifyModule()
   if (PP.identifyModule > 0)
   {
     DiyBMSATTiny841::NotificationLedOn();
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 430
+#if DIYBMSMODULEVERSION < 430
     DiyBMSATTiny841::BlueLedOn();
 #endif
     PP.identifyModule--;
@@ -285,7 +285,7 @@ inline void identifyModule()
     if (DiyBMSATTiny841::CheckSerial0Idle() && myPacketSerial.isIdle() && PP.identifyModule == 0)
     {
       DiyBMSATTiny841::NotificationLedOff();
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 430
+#if DIYBMSMODULEVERSION < 430
       DiyBMSATTiny841::BlueLedOff();
 #endif
     }
@@ -329,7 +329,7 @@ void loop()
 
   if (wdt_triggered)
   {
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 440
+#if DIYBMSMODULEVERSION < 440
     //Flash blue LED twice after a watchdog wake up
     DiyBMSATTiny841::double_tap_blue_led();
 #else
@@ -354,7 +354,7 @@ void loop()
   if (PP.bypassCountDown == 0)
   {
     //Just for debug purposes, shows when voltage is read
-    //#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 430
+    //#if DIYBMSMODULEVERSION < 430
     //    DiyBMSATTiny841::BlueLedOn();
     //#endif
 
@@ -432,7 +432,7 @@ void loop()
         myPID.clear();
         StopBalance();
 //Just for debug...
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 430
+#if DIYBMSMODULEVERSION < 430
         DiyBMSATTiny841::BlueLedOn();
 #endif
       }

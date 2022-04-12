@@ -73,7 +73,7 @@ void DiyBMSATTiny841::double_tap_Notification_led()
   NotificationLedOff();
 }
 
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 440
+#if DIYBMSMODULEVERSION < 440
 void DiyBMSATTiny841::double_tap_blue_led()
 {
   BlueLedOn();
@@ -95,7 +95,7 @@ void DiyBMSATTiny841::ConfigurePorts()
 
 //DDRA – Port A Data Direction Register
 //When DDAn is set, the pin PAn is configured as an output. When DDAn is cleared, the pin is configured as an input
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 440
+#if DIYBMSMODULEVERSION < 440
   //PA3 = dump load enable
   //PA6 = Notification LED (green)
   //PA7 = enable
@@ -130,7 +130,7 @@ void DiyBMSATTiny841::ConfigurePorts()
   DumpLoadOff();
   ReferenceVoltageOff();
 
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 440
+#if DIYBMSMODULEVERSION < 440
   BlueLedOff();
 #endif
 
@@ -221,7 +221,7 @@ void DiyBMSATTiny841::Sleep()
   // disable ADC
   ADCSRA = 0;
 
-#if defined(DIYBMSMODULEVERSION) && DIYBMSMODULEVERSION < 440
+#if DIYBMSMODULEVERSION < 440
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 #else
   //Using an external crystal so keep it awake - consumes more power (about 0.97mA vs 0.78mA) but module wakes quicker (6 clock cycles)
