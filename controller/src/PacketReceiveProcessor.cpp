@@ -133,7 +133,7 @@ bool PacketReceiveProcessor::ProcessReply(PacketMeta *meta)
 #define LOOP(_typ)                                              \
   if(isShortPacket(sizeof(_typ)))                               \
     return false;                                               \
-  _typ *data = reinterpret_cast<_typ *>(_data);                 \
+  _typ *data = reinterpret_cast<_typ *>(_header+1);             \
   CellModuleInfo *cell = &cmi[_header->start];                  \
   for(uint16_t i = 0; i <= _header->cells; data++,cell++,i++)
 

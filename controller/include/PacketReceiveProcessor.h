@@ -42,7 +42,6 @@ public:
 private:
   PacketMeta *_meta;
   PacketHeader *_header;
-  void *_data;
   uint16_t _dataLen;
 
   bool ProcessReplySettings();
