@@ -94,14 +94,14 @@ void DefaultConfig()
 
 #if DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20)
   //Keep temperature low for modules with R19 and R20 not swapped
-  myConfig.BypassTemperature = 715; // 45 degC
+  myConfig.BypassTemperature = 715; // ~45 degC
 #else
   //Stop running bypass if temperature over 65 degrees C
-  myConfig.BypassTemperature = 850; // 65 degC
+  myConfig.BypassTemperature = 850; // ~65 degC
 #endif
 
   //Start bypass at 4.1V
-  myConfig.BypassThreshold = 955; // 4100/4398*1024 -- way too high for lifepo4 cells
+  myConfig.BypassThreshold = 955 *SAMPLEAVERAGING; // 955 = 4100/4398*1024
 }
 
 ISR(WDT_vect)
