@@ -259,6 +259,13 @@ public:
     return Steinhart::ThermistorToCelsius(Internal_BCoefficient, raw);
   }
 
+  // conversion functions
+  inline int8_t ThermistorToCelsiusExt(uint16_t raw) {
+    if(External_BCoefficient == 0) return -100;
+    if(raw == 0) return -100;
+    return Steinhart::ThermistorToCelsius(External_BCoefficient, raw);
+  }
+
   inline uint16_t CelsiusToThermistor(int8_t degC) {
     if(Internal_BCoefficient == 0) return 0;
     if(degC < -99) return 0;
