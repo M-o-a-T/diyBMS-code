@@ -1002,8 +1002,10 @@ void onMqttConnect(bool sessionPresent)
 
 void LoadConfiguration()
 {
-  if (Settings::ReadConfigFromEEPROM((char *)&mysettings, sizeof(mysettings), EEPROM_SETTINGS_START_ADDRESS))
+  if (Settings::ReadConfigFromEEPROM((char *)&mysettings, sizeof(mysettings), EEPROM_SETTINGS_START_ADDRESS)) {
+    mysettings.baudRate = COMMS_BAUD_RATE;
     return;
+  }
 
   SERIAL_DEBUG.println(F("Apply default config"));
 
@@ -1014,6 +1016,10 @@ void LoadConfiguration()
   mysettings.totalNumberOfBanks = 1;
   mysettings.totalNumberOfSeriesModules = 1;
   mysettings.BypassMaxTemp = 65;
+
+  // default serial speed
+  mysettings.baudRate = COMMS_BAUD_RATE;
+
   //4.10V bypass
   mysettings.BypassThresholdmV = 4100;
   mysettings.graph_voltagehigh = 4.5;
@@ -1405,7 +1411,7 @@ void setup()
   clearAPSettings = digitalRead(RESET_WIFI_PIN);
   hal.GreenLedOff();
 
-  SERIAL_DATA.begin(COMMS_BAUD_RATE, SERIAL_8N1); // Serial for comms to modules
+  SERIAL_DATA.begin(mysettings.baudRate, SERIAL_8N1); // Serial for comms to modules
   //Use alternative GPIO pins of D7/D8
   //D7 = GPIO13 = RECEIVE SERIAL
   //D8 = GPIO15 = TRANSMIT SERIAL
