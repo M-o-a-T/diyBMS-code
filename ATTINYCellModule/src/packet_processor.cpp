@@ -233,16 +233,22 @@ void PacketProcessor::onHeaderReceived(PacketHeader *header)
 
 // here we have received our data, so assuming that we don't need to write
 // any, just start forwarding.
+// Sending the new header is delayed until the consumed data have arrived
+// because otherwise the delay between header and remaining data
+// accumulates, causing a packet timeout.
 //
 void PacketProcessor::onReadReceived(PacketHeader *header)
 {
+  // unused for now, as no current command reads and writes data
   uint16_t more=0;
+
   switch (header->command)
   {
   case COMMAND::WriteSettings:
   case COMMAND::WriteBalanceLevel:
     header->seen = 1;
-    // fall through
+    // fall through, though TODO actually no other commands should be seen
+    // here in the first place
   default:
     serial->sendStartFrame(more);
     break;
