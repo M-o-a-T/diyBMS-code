@@ -139,7 +139,7 @@ void Rules::SetError(InternalErrorCode err)
 
             ErrorCodes[i] = err;
 
-            SERIAL_DEBUG.print(F("Error State="));SERIAL_DEBUG.println(err);
+            // SERIAL_DEBUG.print(F("Error State="));SERIAL_DEBUG.println(err);
             break;
         }
     }
