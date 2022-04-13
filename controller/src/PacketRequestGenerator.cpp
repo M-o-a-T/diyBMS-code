@@ -12,12 +12,13 @@ bool PacketRequestGenerator::sendSaveGlobalSetting(uint16_t BypassThresholdmV, u
   setPacketAddressBroadcast(header);
   header->command = COMMAND::WriteSettings;
 
+
   CellModuleInfo *cell = &cmi[0];
   for(; cell != &cmi[mysettings.totalNumberOfSeriesModules]; data++,cell++) {
     // Force refresh of settings
     cell->settingsCached = false;
 
-    data->voltageCalibration.f = cell->Calibration;
+    data->voltageCalibration.u = 0;
     data->bypassTempRaw = cell->CelsiusToThermistor(cell->BypassMaxTemp);
     data->bypassVoltRaw = cell->mVToRaw(cell->BypassConfigThresholdmV);
   }
@@ -40,9 +41,9 @@ bool PacketRequestGenerator::sendSaveSetting(uint8_t m, uint16_t BypassThreshold
   // Force refresh of settings
   cell->settingsCached = false;
 
-  data->voltageCalibration.f = cell->Calibration;
-  data->bypassTempRaw = cell->CelsiusToThermistor(cell->BypassMaxTemp);
-  data->bypassVoltRaw = cell->mVToRaw(cell->BypassConfigThresholdmV);
+  data->voltageCalibration.f = Calibration;
+  data->bypassVoltRaw = cell->mVToRaw(BypassThresholdmV);
+  data->bypassTempRaw = cell->CelsiusToThermistor(BypassOverTempShutdown);
 
   return pushPacketToQueue(meta);
 }
