@@ -1,7 +1,6 @@
 #include "Steinhart.h"
 
 #include <math.h>
-#include <Arduino.h>
 
 #define NOMINAL_TEMPERATURE 25
 
@@ -20,24 +19,14 @@ int16_t Steinhart::ThermistorToCelsius(uint16_t BCOEFFICIENT, uint16_t RawADC)
   // source: https://arduinodiy.wordpress.com/2015/11/10/measuring-temperature-with-ntc-the-steinhart-hart-formula/
 
   // ADC is 10 bits wide
-Serial1.print(">C ");
-Serial1.print(RawADC); Serial1.write(' ');
-
   float res = (float)((1<<10)-1) / (float)RawADC - 1.0;
-Serial1.print(res); Serial1.write(' ');
 
   res = log(res); // ln(R/Ro)
-Serial1.print(res); Serial1.write(' ');
   res /= BCOEFFICIENT; // 1/B * ln(R/Ro)
-Serial1.print(res); Serial1.write(' ');
   res += 1.0 / (NOMINAL_TEMPERATURE + 273.15); // + (1/To)
-Serial1.print(res); Serial1.write(' ');
   res = 1.0 / res; // Invert
-Serial1.print(res); Serial1.write(' ');
   res -= 273.15; // convert to oC
-Serial1.print(res); Serial1.write(' ');
 
-Serial1.println((int16_t)(res+0.5));
   return (int16_t)(res+0.5);
 
   //Temp = log(Temp);
@@ -52,21 +41,12 @@ uint16_t Steinhart::CelsiusToThermistor(uint16_t BCOEFFICIENT, int16_t degC)
   if(degC < -100)
     return 0;
 
-Serial1.print("C> ");
-Serial1.print(degC); Serial1.write(' ');
   float res = (float)degC + 273.15; // convert to K
-Serial1.print(res); Serial1.write(' ');
   res = 1.0 / res; // Invert
-Serial1.print(res); Serial1.write(' ');
   res -= 1.0 / (NOMINAL_TEMPERATURE + 273.15); // + (1/To)
-Serial1.print(res); Serial1.write(' ');
   res *= BCOEFFICIENT; // 1/B * ln(R/Ro)
-Serial1.print(res); Serial1.write(' ');
   res = exp(res); // ln(R/Ro)
-Serial1.print(res); Serial1.write(' ');
   res = (float)((1<<10)-1) / (res+1.0);
-Serial1.print(res); Serial1.write(' ');
-Serial1.println((int16_t)(res+0.5));
 
 
   return (int16_t)(res+0.5);
