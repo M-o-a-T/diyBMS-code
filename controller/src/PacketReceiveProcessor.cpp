@@ -140,7 +140,7 @@ bool PacketReceiveProcessor::ProcessReply(PacketMeta *meta)
 bool PacketReceiveProcessor::ProcessReplyTemperature()
 {
   LOOP(PacketReplyTemperature) {
-    cell->internalTemp = cell->ThermistorToCelsius(data->extRaw);
+    cell->internalTemp = cell->ThermistorToCelsius(data->intRaw);
     cell->externalTemp = cell->ThermistorToCelsiusExt(data->extRaw);
   }
   return true;
