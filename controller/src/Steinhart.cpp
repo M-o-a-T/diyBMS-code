@@ -27,7 +27,7 @@ int16_t Steinhart::ThermistorToCelsius(uint16_t BCOEFFICIENT, uint16_t RawADC)
   res = 1.0 / res; // Invert
   res -= 273.15; // convert to oC
 
-  return (int16_t)res;
+  return (int16_t)(res+0.5);
 
   //Temp = log(Temp);
   //Temperature in Kelvin = 1 / {A + B[ln(R)] + C[ln(R)]^3}
