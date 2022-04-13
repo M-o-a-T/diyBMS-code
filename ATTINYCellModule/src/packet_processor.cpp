@@ -273,7 +273,10 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
     return;
   }
 
-  badpackets += ((header->sequence - lastSequence) & 0x07) - 1;
+  if(badpackets == ~0)
+    badpackets = 0;
+  else
+    badpackets += ((header->sequence - lastSequence) & 0x07) - 1;
   lastSequence = header->sequence;
 
   switch (header->command)

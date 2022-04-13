@@ -93,7 +93,7 @@ private:
   volatile uint16_t raw_adc_external_temperature;
 
   //Count of bad packets of data received, most likely with corrupt data or crc errors
-  uint16_t badpackets = 0;
+  uint16_t badpackets = ~0;
   //Count of number of WDT events which have triggered, could indicate standalone mode or problems with serial comms
   uint16_t watchdog_counter = 0;
 
