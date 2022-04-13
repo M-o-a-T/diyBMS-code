@@ -49,7 +49,7 @@ uint16_t Steinhart::CelsiusToThermistor(uint16_t BCOEFFICIENT, int16_t degC)
   res = (float)((1<<10)-1) / (res+1.0);
 
 
-  return (int16_t)res;
+  return (int16_t)(res+0.5);
 
   //Temp = log(Temp);
   //Temperature in Kelvin = 1 / {A + B[ln(R)] + C[ln(R)]^3}
