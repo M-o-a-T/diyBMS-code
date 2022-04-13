@@ -236,6 +236,7 @@ void setup()
 
 #ifdef SP_NONFRAME_STREAM
   SP_NONFRAME_STREAM.println("Module Start");
+  SP_NONFRAME_STREAM.flush();
 #endif
 }
 
