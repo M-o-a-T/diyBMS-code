@@ -28,7 +28,7 @@ def generatejson(target, source, env):
         os.mkdir(avrfolder)
 
     my_flags = env.ParseFlags(env['BUILD_FLAGS'])
-    defines = {k: v for (k, v) in my_flags.get("CPPDEFINES")}
+    defines = {k[0]: k[1] for k in my_flags.get("CPPDEFINES") if isinstance(k,(tuple,list))}
 
     # Generate a filename which is less than 35 characters (LittleFS max)
     newfilename="fw_%s_%s.bin" % (env["PIOENV"], env["git_sha_short"] )
