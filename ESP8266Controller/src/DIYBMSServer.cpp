@@ -695,7 +695,7 @@ void DIYBMSServer::settings(AsyncWebServerRequest *request)
   settings["totalnumberofbanks"] = _mysettings->totalNumberOfBanks;
   settings["totalseriesmodules"] = _mysettings->totalNumberOfSeriesModules;
 
-  settings["bypassthreshold"] = _mysettings->BypassThresholdmV;
+  settings["bypassthreshold"] = ((_mysettings->BypassThresholdmV+5)/10)*10;
   settings["bypassovertemp"] = _mysettings->BypassMaxTemp;
 
   settings["NTPServerName"] = _mysettings->ntpServer;
@@ -835,7 +835,7 @@ void DIYBMSServer::modules(AsyncWebServerRequest *request)
     if (cmi[c].settingsCached)
     {
       settings["BypassOverTempShutdown"] = cmi[c].BypassMaxTemp;
-      settings["BypassThresholdmV"] = cmi[c].BypassConfigThresholdmV;
+      settings["BypassThresholdmV"] = ((cmi[c].BypassConfigThresholdmV+5)/10)*10;
       settings["LoadRes"] = cmi[c].LoadResistance;
       settings["Calib"] = cmi[c].Calibration;
       settings["mVPerADC"] = cmi[c].mVPerADC;

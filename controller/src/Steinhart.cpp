@@ -69,7 +69,7 @@ Serial1.print(res); Serial1.write(' ');
 Serial1.println((int16_t)(res+0.5));
 
 
-  return (int16_t)res;
+  return (int16_t)(res+0.5);
 
   //Temp = log(Temp);
   //Temperature in Kelvin = 1 / {A + B[ln(R)] + C[ln(R)]^3}
