@@ -553,19 +553,9 @@ void DIYBMSServer::saveSetting(AsyncWebServerRequest *request)
     else
     {
 
-      uint8_t BypassMaxTemp = 0xFF;
-      uint16_t BypassThresholdmV = 0xFFFF;
-
-      // Resistance of bypass load
-      //float LoadResistance = 0xFFFF;
-      //Voltage Calibration
-      float Calibration = 0xFFFF;
-      //Reference voltage (millivolt) normally 2.00mV
-      //float mVPerADC = 0xFFFF;
-      //Internal Thermistor settings
-      //uint16_t Internal_BCoefficient = 0xFFFF;
-      //External Thermistor settings
-      //uint16_t External_BCoefficient = 0xFFFF;
+      uint8_t BypassMaxTemp = 0;
+      uint16_t BypassThresholdmV = 0;
+      float Calibration = 0;
 
       if (request->hasParam("BypassOverTempShutdown", true))
       {
