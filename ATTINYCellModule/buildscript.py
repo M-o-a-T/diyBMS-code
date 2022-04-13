@@ -7,7 +7,7 @@ platform = env.PioPlatform()
 
 my_flags = env.ParseFlags(env['BUILD_FLAGS'])
 #print(my_flags)
-defines = {k: v for (k, v) in my_flags.get("CPPDEFINES")}
+defines = {k[0]: k[1] for k in my_flags.get("CPPDEFINES") if isinstance(k,(tuple,list))}
 #print(defines.get("DIYBMSMODULEVERSION"))
 
 efuse=hex(int(env.GetProjectOption("board_fuses.efuse"), 2)).upper()[2:4]
