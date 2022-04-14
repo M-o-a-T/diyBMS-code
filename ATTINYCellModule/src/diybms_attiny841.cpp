@@ -202,6 +202,7 @@ void DiyBMSATTiny841::BeginADCReading()
   // start the conversion
   sleep_cpu();
   sleep_disable();
+  interrupts();
 
   // awake again, reading should be done, better make sure maybe the timer interrupt fired
   while (bit_is_set(ADCSRA, ADSC))
