@@ -169,6 +169,7 @@ void PacketProcessor::onHeaderReceived(PacketHeader *header)
     serial->sendStartCopy(0);
     return;
   }
+  identifyModule++;
 
   switch (header->command)
   {
@@ -274,7 +275,7 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
     // Not for us. Done.
     return;
   }
-
+  // must be at least 1 because ::onHeaderReceived incremented it
   if(badpackets == ~0)
     badpackets = 0;
   else

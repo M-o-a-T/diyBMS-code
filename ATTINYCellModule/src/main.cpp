@@ -279,21 +279,19 @@ ISR(TIMER1_COMPA_vect)
 
 inline void identifyModule()
 {
-  if (PP.identifyModule > 0)
+  if (PP.identifyModule)
   {
     DiyBMSATTiny841::NotificationLedOn();
 #if DIYBMSMODULEVERSION < 430
     DiyBMSATTiny841::BlueLedOn();
 #endif
-    PP.identifyModule--;
-
-    if (DiyBMSATTiny841::CheckSerial0Idle() && myPacketSerial.isIdle() && PP.identifyModule == 0)
-    {
-      DiyBMSATTiny841::NotificationLedOff();
+  }
+  else
+  {
+    DiyBMSATTiny841::NotificationLedOff();
 #if DIYBMSMODULEVERSION < 430
-      DiyBMSATTiny841::BlueLedOff();
+    DiyBMSATTiny841::BlueLedOff();
 #endif
-    }
   }
 }
 
@@ -303,7 +301,6 @@ void loop()
 {
   //This loop runs around 3 times per second when the module is in bypass
   wdt_reset();
-  identifyModule();
 
   if(!++lpc) Serial.write('L');
   if (PP.SettingsHaveChanged)
@@ -312,27 +309,36 @@ void loop()
     StopBalance();
   }
 
-  // ??? noInterrupts();
-  if (!myPacketSerial.isIdle())
-    DiyBMSATTiny841::NotificationLedOn();
-
-  if (!PP.WeAreInBypass && PP.bypassHasJustFinished == 0 && DiyBMSATTiny841::CheckSerial0Idle())
+  if (DiyBMSATTiny841::CheckSerial0Idle() && myPacketSerial.isIdle())
   {
-    //Go to SLEEP, we are not in bypass anymore and no serial data waiting...
+    // count down twice; once because it's been set as the header arrived,
+    // twice to count down for the Identify command
+    if(PP.identifyModule) {
+      if(--PP.identifyModule)
+        --PP.identifyModule;
+    }
+    identifyModule();
 
-    //Reset PID to defaults, in case we want to start balancing
-    myPID.clear();
+    if (!PP.WeAreInBypass && PP.bypassHasJustFinished == 0)
+    {
+      //Go to SLEEP, we are not in bypass anymore and no serial data waiting...
 
-    //Switch off TX - save power
-    //DiyBMSATTiny841::DisableSerial0TX();
+      //Reset PID to defaults, in case we want to start balancing
+      myPID.clear();
 
-    //Wake up on Serial port RX
-    DiyBMSATTiny841::EnableStartFrameDetection();
+      //Switch off TX - save power
+      //DiyBMSATTiny841::DisableSerial0TX();
 
-    //Program stops here until woken by watchdog or Serial port ISR
-    //DiyBMSATTiny841::Sleep();
+      //Wake up on Serial port RX
+      DiyBMSATTiny841::EnableStartFrameDetection();
+
+      //Program stops here until woken by watchdog or Serial port ISR
+      //DiyBMSATTiny841::Sleep();
+      //We are awake....
+    }
   }
-  //We are awake....
+  else
+    identifyModule();
 
   if (wdt_triggered)
   {
@@ -438,10 +444,6 @@ void loop()
         //Clear the error and stop balancing
         myPID.clear();
         StopBalance();
-//Just for debug...
-#if DIYBMSMODULEVERSION < 430
-        DiyBMSATTiny841::BlueLedOn();
-#endif
       }
     }
 
