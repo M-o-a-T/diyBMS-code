@@ -22,7 +22,7 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 #error You need to specify the DIYBMSMODULEVERSION define
 #endif
 
-#if DIYBMSMODULEVERSION > 440
+#if (DIYBMSMODULEVERSION<400) || (DIYBMSMODULEVERSION > 440)
 #error Incorrect value for DIYBMSMODULEVERSION
 #endif
 
