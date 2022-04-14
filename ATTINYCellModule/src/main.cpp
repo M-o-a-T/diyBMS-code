@@ -307,9 +307,6 @@ void loop()
   }
 
   noInterrupts();
-  if (!myPacketSerial.isIdle())
-    DiyBMSATTiny841::NotificationLedOn();
-
   if (!PP.WeAreInBypass && PP.bypassHasJustFinished == 0 && DiyBMSATTiny841::CheckSerial0Idle())
   {
     //Go to SLEEP, we are not in bypass anymore and no serial data waiting...
