@@ -279,21 +279,17 @@ ISR(TIMER1_COMPA_vect)
 
 inline void identifyModule()
 {
-  if (PP.identifyModule > 0)
+  if (PP.identifyModule > 0 || !DiyBMSATTiny841::CheckSerial0Idle() || !myPacketSerial.isIdle())
   {
     DiyBMSATTiny841::NotificationLedOn();
 #if DIYBMSMODULEVERSION < 430
     DiyBMSATTiny841::BlueLedOn();
 #endif
-    PP.identifyModule--;
-
-    if (DiyBMSATTiny841::CheckSerial0Idle() && myPacketSerial.isIdle() && PP.identifyModule == 0)
-    {
-      DiyBMSATTiny841::NotificationLedOff();
+  } else {
+    DiyBMSATTiny841::NotificationLedOff();
 #if DIYBMSMODULEVERSION < 430
-      DiyBMSATTiny841::BlueLedOff();
+    DiyBMSATTiny841::BlueLedOff();
 #endif
-    }
   }
 }
 

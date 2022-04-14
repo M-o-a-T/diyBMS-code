@@ -163,6 +163,7 @@ void PacketProcessor::onHeaderReceived(PacketHeader *header)
   uint8_t more = 0;
 
   header->hops += 1;
+  identifyModule++;
 
   if(header->start > addr || header->start + header->cells < addr) {
     // Not for us. Just forward.
@@ -271,6 +272,13 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
   if(header->start > addr || header->start + header->cells < addr) {
     // Not for us. Done.
     return;
+  }
+  // Count down twice. Once for the packet and twice for the identityModule
+  // command's countdown.
+  if(identifyModule) {
+    identifyModule--;
+    if(identifyModule)
+      identifyModule--;
   }
 
   if(badpackets == ~0)
