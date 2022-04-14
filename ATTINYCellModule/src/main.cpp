@@ -335,12 +335,13 @@ void loop()
 
       //Program stops here until woken by watchdog or Serial port ISR
       DiyBMSATTiny841::Sleep();
-      //We are awake....
+
+      //We are awake
     }
   }
   else
     identifyModule();
-  interrupts();
+  interrupts(); // in case we didn't sleep
 
   if (wdt_triggered)
   {

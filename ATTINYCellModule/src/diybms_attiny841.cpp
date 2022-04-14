@@ -180,6 +180,7 @@ void DiyBMSATTiny841::BeginADCReading()
 #if !(F_CPU == 2000000)
 */
 
+  noInterrupts();
   //prescaler of 16 = 2MHz/16 = 125000.
   ADCSRA |= _BV(ADPS2);
 
@@ -189,20 +190,20 @@ void DiyBMSATTiny841::BeginADCReading()
   //Bit 7 – ADEN: ADC Enable
   ADCSRA |= _BV(ADEN) | _BV(ADIF); // enable ADC, turn off any pending interrupt
 
-  //noInterrupts();
   set_sleep_mode(SLEEP_MODE_IDLE); // IDLE sleep during ADC sample, allowing counters and timers to work
   sleep_enable();
 
   // start the conversion
   ADCSRA |= _BV(ADSC) | _BV(ADIE);
-  //interrupts();
-  sleep_cpu();
-  sleep_disable();
 
-  // awake again, reading should be done, better make sure maybe the timer interrupt fired
-  while (bit_is_set(ADCSRA, ADSC))
-  {
+  // wait for conversion-complete interrupt
+  do {
+    interrupts();
+    sleep_cpu();
+    noInterrupts();
   }
+  while (bit_is_set(ADCSRA, ADSC)); // maybe the timer interrupted us instead
+  sleep_disable();
 
   //adc_disable
   ADCSRA &= (~(1 << ADEN));
@@ -210,10 +211,12 @@ void DiyBMSATTiny841::BeginADCReading()
 
 void DiyBMSATTiny841::Sleep()
 {
+  // This must be called with interrupts disabled.
+  // After sleeping, interrupts will be enabled.
+  //
   //ATTINY841 sleep mode
   byte old_ADCSRA = ADCSRA;
-  //For low power applications, before entering sleep, remember to turn off the ADC
-  //ADCSRA&=(~(1<<ADEN));
+
   // disable ADC
   ADCSRA = 0;
 
@@ -236,9 +239,8 @@ void DiyBMSATTiny841::Sleep()
   //Keep this alive
   //power_usart0_enable();
 
-  sei();
-  interrupts();
   sleep_enable();
+  sei();
   sleep_cpu();
 
   //Snoring can be heard at this point....
