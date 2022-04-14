@@ -260,7 +260,6 @@ void PacketProcessor::onReadReceived(PacketHeader *header)
     do { \
       if(serial->receiveCount() < sizeof(PacketHeader) + sizeof(type)) { \
         serial->sendEndFrame(true); \
-        Serial.write("\nM ERR BADLEN\n"); \
         return; \
       } \
     } while(0)
