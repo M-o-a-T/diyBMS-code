@@ -189,11 +189,6 @@ void DiyBMSATTiny841::BeginADCReading()
   //Bit 7 – ADEN: ADC Enable
   ADCSRA |= _BV(ADEN) | _BV(ADIF); // enable ADC, turn off any pending interrupt
 
-  // wait for ADC to settle
-  // The ADC must be enabled during the settling time.
-  // ADC requires a settling time of 1ms before measurements are stable
-  delay(1);
-
   //noInterrupts();
   set_sleep_mode(SLEEP_MODE_IDLE); // IDLE sleep during ADC sample, allowing counters and timers to work
   sleep_enable();
