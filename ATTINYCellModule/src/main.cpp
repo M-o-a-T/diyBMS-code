@@ -309,6 +309,7 @@ void loop()
     StopBalance();
   }
 
+  noInterrupts();
   if (DiyBMSATTiny841::CheckSerial0Idle() && myPacketSerial.isIdle())
   {
     // count down twice; once because it's been set as the header arrived,
@@ -333,12 +334,13 @@ void loop()
       DiyBMSATTiny841::EnableStartFrameDetection();
 
       //Program stops here until woken by watchdog or Serial port ISR
-      //DiyBMSATTiny841::Sleep();
+      DiyBMSATTiny841::Sleep();
       //We are awake....
     }
   }
   else
     identifyModule();
+  interrupts();
 
   if (wdt_triggered)
   {
