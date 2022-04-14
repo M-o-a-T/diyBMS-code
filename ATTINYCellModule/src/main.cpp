@@ -234,7 +234,7 @@ void setup()
 
   myPacketSerial.begin(&Serial, &onPacketHeader, &onReadReceived, &onPacketReceived, SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer), sizeof(PacketHeader));
 
-#ifdef SP_NONFRAME_STREAM
+#if 0 // def SP_NONFRAME_STREAM
   SP_NONFRAME_STREAM.println("Module Start");
   SP_NONFRAME_STREAM.flush();
 #endif
