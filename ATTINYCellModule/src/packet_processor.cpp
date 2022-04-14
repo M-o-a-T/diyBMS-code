@@ -280,7 +280,7 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
       identifyModule--;
   }
 
-  if(badpackets == ~0)
+  if(badpackets == (uint16_t)~0)
     badpackets = 0;
   else
     badpackets += ((header->sequence - lastSequence) & 0x07) - 1;
