@@ -307,9 +307,9 @@ void loop()
   }
 
   noInterrupts();
-  if (!PP.WeAreInBypass && PP.bypassHasJustFinished == 0 && DiyBMSATTiny841::CheckSerial0Idle())
+  if (!PP.WeAreInBypass && !PP.bypassHasJustFinished && DiyBMSATTiny841::CheckSerial0Idle() && myPacketSerial.isIdle())
   {
-    //Go to SLEEP, we are not in bypass anymore and no serial data waiting...
+    //Go to SLEEP, we are not in bypass anymore and no serial data / processing waiting...
 
     //Reset PID to defaults, in case we want to start balancing
     myPID.clear();
@@ -324,6 +324,7 @@ void loop()
     DiyBMSATTiny841::Sleep();
   }
   //We are awake....
+  interrupts();
 
   if (wdt_triggered)
   {
@@ -338,7 +339,6 @@ void loop()
     //If we have just woken up, we shouldn't be in balance safety check that we are not
     StopBalance();
   }
-  interrupts();
 
   //We always take a voltage and temperature reading on every loop cycle to check if we need to go into bypass
   //this is also triggered by the watchdog should comms fail or the module is running standalone
