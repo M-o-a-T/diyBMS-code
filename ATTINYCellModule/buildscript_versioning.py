@@ -5,10 +5,13 @@ import os
 from os import path
 
 Import("env")
+env.Replace(PROGNAME="diybms_controller_firmware_%s_%s" %
+            (env["PIOPLATFORM"], env["PIOENV"]))
 
 git_sha=None
 
 try:
+    # github tells us the hash
     git_sha=env["GITHUB_SHA"]
 except KeyError:
     if (path.exists('..'+os.path.sep+'.git')):
@@ -16,8 +19,8 @@ except KeyError:
         try:
             git_sha = subprocess.check_output(['git','log','-1','--pretty=format:%H']).decode('utf-8')
         except Exception:
-            # Ignore any error, user may not have GIT installed
-            git_sha = None
+            # user may not have GIT installed
+            pass
 
 # print(env.Dump())
 
