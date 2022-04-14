@@ -242,9 +242,6 @@ void PacketProcessor::onReadReceived(PacketHeader *header)
 {
   // unused for now, as no current command reads and writes data
   uint16_t more=0;
-Serial.write('H');
-Serial.print(header->command);
-Serial.write(' ');
   switch (header->command)
   {
   case COMMAND::WriteSettings:
@@ -262,7 +259,6 @@ Serial.write(' ');
     do { \
       if(serial->receiveCount() < sizeof(PacketHeader) + sizeof(type)) { \
         serial->sendEndFrame(true); \
-        Serial.write("\nM ERR BADLEN\n"); \
         return; \
       } \
     } while(0)
@@ -360,15 +356,11 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
       CHECK_LEN(PacketRequestConfig);
 
       serial->sendEndFrame(false);
-      Serial.print("\nModSettings");
 
       struct PacketRequestConfig *data = (PacketRequestConfig *)(header+1);
 
-      if(data->voltageCalibration.u) {
+      if(data->voltageCalibration.u)
         _config->Calibration = data->voltageCalibration.u;
-      Serial.print(" cal=");
-      Serial.print(_config->Calibration);
-      }
 
       if(data->bypassTempRaw) {
 #if DIYBMSMODULEVERSION == 420 && !defined(SWAPR19R20)
@@ -377,21 +369,16 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
           data->bypassTempRaw = 715;
 #endif
         _config->BypassTemperature = data->bypassTempRaw;
-      Serial.print(" temp=");
-      Serial.print(_config->BypassTemperature);
       }
 
       if (data->bypassVoltRaw) {
         _config->BypassThreshold = data->bypassVoltRaw;
-      Serial.print(" volt=");
-      Serial.print(_config->BypassThreshold);
       }
 
       //Save settings
       Settings::WriteConfigToEEPROM((uint8_t *)_config, sizeof(CellModuleConfig), EEPROM_CONFIG_ADDRESS);
 
       SettingsHaveChanged = true;
-      Serial.println(" saved");
 
       break;
     }
