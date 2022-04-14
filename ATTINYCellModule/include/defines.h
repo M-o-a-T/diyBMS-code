@@ -45,12 +45,6 @@ struct CellModuleConfig {
 
   //Voltage Calibration
   uint32_t Calibration;  // only stored
-  //Reference voltage (millivolt) normally 2.00mV
-  //float mVPerADC;
-  //Internal Thermistor settings
-  //uint16_t Internal_BCoefficient;
-  //External Thermistor settings
-  //uint16_t External_BCoefficient;
 } __attribute__((packed));
 
 #endif
