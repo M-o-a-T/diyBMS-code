@@ -54,31 +54,34 @@ number.
 When a programming adapter feeds 5V to a module but doesn't keep it in
 reset, turning the bypass on is not helpful.
 
+### Protocol versioning
+
+The protocol now has a version number, transmitted by the module in the
+header of its config data chunk.
+
 ## Future Changes
 
 ### CRC polynomial
 
-The main reason for using a polynomial like 0x1021 was that it doesn't have
+The main reason for using the CRC polynomial `0x1021` was that it doesn't have
 many bits set. This saves space when you implement it in hardware.
 
-The problem is that 0x1021 doesn't find many bit errors.
+The problem is that CRC polynomials are not just random bits; some perform
+better (i.e. they recognize more bit errors, for a given block size) than
+others. Surprise: 0x1021 is definitely no overachiever.
 
 This can be improved. The polynomial 0xBAAD has much better error detection
 characteristics (4 errors for messages up to 256 bytes).
 You can read a paper with more details
 [here](http://users.ece.cmu.edu/~koopman/roses/dsn04/koopman04_crc_poly_embedded.pdf).
 
-Also, we might want to use a 4-bit lookup table instead of looping through each bit.
+Also, we might want to use a 4-bit lookup table (needs only 32 bytes in
+ROM) instead of looping through each bit.
 
 ### Fix queues
 
 There's an open TODO in the controller to use RTOS queues instead of
 cppQueue.
-
-### Protocol versioning
-
-The protocol needs its own version number. Just ask the module(s) what they
-understand.
 
 ### Support alerts
 
@@ -116,6 +119,38 @@ modules, but (a) the current code doesn't need that feature and (b) blocks
 tend to be at (or slightly below) a power-of-2-size anyway. We might want
 to tell the last module within a block to increment the hop count by more
 than 1.
+
+### Modbus/TCP support
+
+The ESP8266 doesn't have a ton of free space, but porting the Modbus
+implementation might still be a good idea.
+
+### Code reorg
+
+More code needs to go to common sub-lilbraries. 
+
+### Port to other embedded ICs
+
+FreeRTOS works on ARM Cortex. We might want to replace the ESP32 (or the
+ESP8266 on smaller controllers) with something that doesn't require WLAN.
+
+### Sleep mode
+
+Teach the modules to (optionally) go to sleep for longer, saving power e.g.
+when a boat with out controller is idle during the winter. Wakeup could be
+done by attaching the wakeup interrupt to the serial line. Toggle it, wait
+a bit, then send the wakeup command along to the next module.
+
+### Load Resistors
+
+The load resistors' combined value should be configurable; to be stored in
+the module.
+
+Future modules might want to use a high-wattage resistor, possibly with
+improved passive cooling. This becomes more important as batteries age, or
+when this system is used with second-use batteries.
+
+Separate code versions for these variants are not useful.
 
 ----
 
