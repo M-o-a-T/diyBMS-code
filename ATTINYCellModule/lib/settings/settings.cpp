@@ -1,5 +1,5 @@
 #include "settings.h"
-#include "crc16.h"
+#include "SerialPacker.h" // recycle its CRC support
 
 bool Settings::WriteConfigToEEPROM(uint8_t* settings, uint16_t size, uint16_t eepromStartAddress) {
   //TODO: We should probably check EEPROM.length() to ensure it's big enough
@@ -11,7 +11,7 @@ bool Settings::WriteConfigToEEPROM(uint8_t* settings, uint16_t size, uint16_t ee
   }
 
   //Generate and save the checksum for the setting data block
-  uint16_t checksum = CRC16_Buffer(settings, size);
+  uint16_t checksum = SerialPacker::crc16_buffer(settings, size);
   EEPROM.put(eepromStartAddress+size, checksum);
 
   // verify EEPROM content
@@ -26,8 +26,7 @@ bool Settings::ReadConfigFromEEPROM(uint8_t* settings, uint16_t size, uint16_t e
   }
 
   // Calculate the checksum
-  uint16_t checksum = CRC16_Buffer(settings, size);
-
+  uint16_t checksum = SerialPacker::crc16_buffer(settings, size);
 
   uint16_t existingChecksum;
   EEPROM.get(eepromStartAddress+size, existingChecksum);
