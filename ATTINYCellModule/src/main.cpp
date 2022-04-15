@@ -60,7 +60,7 @@ https://trolsoft.ru/en/uart-calc
 #include <FastPID.h>
 
 #include <SerialPacker.h>
-#include "diybms_attiny841.h"
+#include "HAL.h"
 #include "packet_processor.h"
 
 uint8_t SerialPacketReceiveBuffer[sizeof(PacketRequestAny) + sizeof(PacketHeader)];
@@ -70,7 +70,7 @@ SerialPacker myPacketSerial;
 //Default values which get overwritten by EEPROM on power up
 CellModuleConfig myConfig;
 
-//DiyBMSATTiny841 hardware;
+//HAL hardware;
 
 PacketProcessor PP(&myConfig, &myPacketSerial);
 
@@ -114,12 +114,12 @@ ISR(WDT_vect)
 ISR(ADC_vect)
 {
   // when ADC completed, take an interrupt and process result
-  PP.ADCReading(DiyBMSATTiny841::ReadADC());
+  PP.ADCReading(HAL::ReadADC());
 }
 
 void onPacketHeader()
 {
-  DiyBMSATTiny841::EnableSerial0TX();
+  HAL::EnableSerial0TX();
 
   //A data packet has just arrived, process it and forward the results to the next module
   PP.onHeaderReceived((PacketHeader *)SerialPacketReceiveBuffer);
@@ -183,8 +183,8 @@ void StopBalance()
   OnPulseCount = 0;
   PulsePeriod = 0;
 
-  DiyBMSATTiny841::StopTimer1();
-  DiyBMSATTiny841::DumpLoadOff();
+  HAL::StopTimer1();
+  HAL::DumpLoadOff();
 }
 
 void setup()
@@ -193,21 +193,21 @@ void setup()
   wdt_disable();
   wdt_reset();
 
-  DiyBMSATTiny841::SetPrescaler();
+  HAL::SetPrescaler();
 
   //below 2Mhz is required for running ATTINY at low voltages (less than 2V)
 
   //8 second between watchdogs
-  DiyBMSATTiny841::SetWatchdog8sec();
+  HAL::SetWatchdog8sec();
 
   //Setup IO ports
-  DiyBMSATTiny841::ConfigurePorts();
+  HAL::ConfigurePorts();
 
   //More power saving changes
-  DiyBMSATTiny841::DisableSerial1();
+  HAL::DisableSerial1();
 
   // Start talking
-  DiyBMSATTiny841::EnableSerial0();
+  HAL::EnableSerial0();
 
   //Check if setup routine needs to be run
   if (!Settings::ReadConfigFromEEPROM((uint8_t *)&myConfig, sizeof(myConfig), EEPROM_CONFIG_ADDRESS))
@@ -218,10 +218,10 @@ void setup()
 
   ValidateConfiguration();
 
-  DiyBMSATTiny841::double_tap_Notification_led();
+  HAL::double_tap_Notification_led();
 
 #if DIYBMSMODULEVERSION < 430
-  DiyBMSATTiny841::double_tap_blue_led();
+  HAL::double_tap_blue_led();
 #endif
 
   //The PID can vary between 0 and 255 (1 byte)
@@ -254,8 +254,8 @@ ISR(TIMER1_COMPA_vect)
   if (InterruptCounter <= PP.PWMSetPoint)
   {
     //Enable the pin
-    //DiyBMSATTiny841::SparePinOn();
-    DiyBMSATTiny841::DumpLoadOn();
+    //HAL::SparePinOn();
+    HAL::DumpLoadOn();
 
     //Count the number of "on" periods, so we can calculate the amount of energy consumed
     //over time
@@ -264,8 +264,8 @@ ISR(TIMER1_COMPA_vect)
   else
   {
     //Off
-    //DiyBMSATTiny841::SparePinOff();
-    DiyBMSATTiny841::DumpLoadOff();
+    //HAL::SparePinOff();
+    HAL::DumpLoadOff();
   }
 
   if (PulsePeriod == 1000)
@@ -281,16 +281,16 @@ inline void identifyModule()
 {
   if (PP.identifyModule)
   {
-    DiyBMSATTiny841::NotificationLedOn();
+    HAL::NotificationLedOn();
 #if DIYBMSMODULEVERSION < 430
-    DiyBMSATTiny841::BlueLedOn();
+    HAL::BlueLedOn();
 #endif
   }
   else
   {
-    DiyBMSATTiny841::NotificationLedOff();
+    HAL::NotificationLedOff();
 #if DIYBMSMODULEVERSION < 430
-    DiyBMSATTiny841::BlueLedOff();
+    HAL::BlueLedOff();
 #endif
   }
 }
@@ -310,7 +310,7 @@ void loop()
   }
 
   noInterrupts();
-  if (DiyBMSATTiny841::CheckSerial0Idle() && myPacketSerial.isIdle())
+  if (HAL::CheckSerial0Idle() && myPacketSerial.isIdle())
   {
     // count down twice; once because it's been set as the header arrived,
     // twice to count down for the Identify command
@@ -328,13 +328,13 @@ void loop()
       myPID.clear();
 
       //Switch off TX - save power
-      //DiyBMSATTiny841::DisableSerial0TX();
+      //HAL::DisableSerial0TX();
 
       //Wake up on Serial port RX
-      DiyBMSATTiny841::EnableStartFrameDetection();
+      HAL::EnableStartFrameDetection();
 
       //Program stops here until woken by watchdog or Serial port ISR
-      DiyBMSATTiny841::Sleep();
+      HAL::Sleep();
 
       //We are awake
     }
@@ -347,10 +347,10 @@ void loop()
   {
 #if DIYBMSMODULEVERSION < 440
     //Flash blue LED twice after a watchdog wake up
-    DiyBMSATTiny841::double_tap_blue_led();
+    HAL::double_tap_blue_led();
 #else
     //Flash Notification LED twice after a watchdog wake up
-    DiyBMSATTiny841::double_tap_Notification_led();
+    HAL::double_tap_Notification_led();
 #endif
 
     //If we have just woken up, we shouldn't be in balance safety check that we are not
@@ -360,7 +360,7 @@ void loop()
 
   //We always take a voltage and temperature reading on every loop cycle to check if we need to go into bypass
   //this is also triggered by the watchdog should comms fail or the module is running standalone
-  DiyBMSATTiny841::ReferenceVoltageOn();
+  HAL::ReferenceVoltageOn();
 
   //Internal temperature
   PP.TakeAnAnalogueReading(ADC_INTERNAL_TEMP);
@@ -371,7 +371,7 @@ void loop()
   {
     //Just for debug purposes, shows when voltage is read
     //#if DIYBMSMODULEVERSION < 430
-    //    DiyBMSATTiny841::BlueLedOn();
+    //    HAL::BlueLedOn();
     //#endif
 
     //External temperature
@@ -391,7 +391,7 @@ void loop()
   }
 
   //Switch reference off if we are not in bypass (otherwise leave on)
-  DiyBMSATTiny841::ReferenceVoltageOff();
+  HAL::ReferenceVoltageOff();
 
   myPacketSerial.checkInputStream();
 
@@ -425,7 +425,7 @@ void loop()
       PP.bypassHasJustFinished = 0;
 
       //Start PWM
-      DiyBMSATTiny841::StartTimer1();
+      HAL::StartTimer1();
       PP.PWMSetPoint = 0;
     }
   }

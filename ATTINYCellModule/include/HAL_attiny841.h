@@ -15,7 +15,7 @@
 This class wraps the hardware pins of DIYBMS away from the core logic/code
 if you are porting to another chipset, clone this class and modify it.
 */
-class DiyBMSATTiny841
+class HAL_attiny841
 {
 public:
    static void ConfigurePorts();

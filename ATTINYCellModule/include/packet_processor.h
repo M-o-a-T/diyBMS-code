@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <SerialPacker.h>
 
-#include "diybms_attiny841.h"
+#include "HAL.h"
 #include "defines.h"
 #include "settings.h"
 

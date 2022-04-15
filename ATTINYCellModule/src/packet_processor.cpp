@@ -128,17 +128,17 @@ void PacketProcessor::TakeAnAnalogueReading(uint8_t mode)
   {
   case ADC_CELL_VOLTAGE:
   {
-    DiyBMSATTiny841::SelectCellVoltageChannel();
+    HAL::SelectCellVoltageChannel();
     break;
   }
   case ADC_INTERNAL_TEMP:
   {
-    DiyBMSATTiny841::SelectInternalTemperatureChannel();
+    HAL::SelectInternalTemperatureChannel();
     break;
   }
   case ADC_EXTERNAL_TEMP:
   {
-    DiyBMSATTiny841::SelectExternalTemperatureChannel();
+    HAL::SelectExternalTemperatureChannel();
     break;
   }
   default:
@@ -146,7 +146,7 @@ void PacketProcessor::TakeAnAnalogueReading(uint8_t mode)
     return;
   }
 
-  DiyBMSATTiny841::BeginADCReading();
+  HAL::BeginADCReading();
 }
 
 
