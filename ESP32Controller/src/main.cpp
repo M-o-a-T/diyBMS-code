@@ -2072,20 +2072,20 @@ void victron_canbus_rx(void *param)
         // ESP_LOGI(TAG, "CANBUS received message");
 
         /*
-      SERIAL_DEBUG.println("Message received\n");
-      SERIAL_DEBUG.print("\nID is 0x");
-      SERIAL_DEBUG.print(message.identifier, HEX);
-      SERIAL_DEBUG.print("=");
-      if (!(message.flags & CAN_MSG_FLAG_RTR))
-      {
-        for (int i = 0; i < message.data_length_code; i++)
+        SERIAL_DEBUG.println("Message received\n");
+        SERIAL_DEBUG.print("\nID is 0x");
+        SERIAL_DEBUG.print(message.identifier, HEX);
+        SERIAL_DEBUG.print("=");
+        if (!(message.flags & CAN_MSG_FLAG_RTR))
         {
-          dumpByte(message.data[i]);
-          SERIAL_DEBUG.print(" ");
+          for (int i = 0; i < message.data_length_code; i++)
+          {
+            dumpByte(message.data[i]);
+            SERIAL_DEBUG.print(" ");
+          }
         }
-      }
-      SERIAL_DEBUG.println();
-      */
+        SERIAL_DEBUG.println();
+        */
       }
       else if (res == ESP_ERR_TIMEOUT)
       {
@@ -2094,25 +2094,25 @@ void victron_canbus_rx(void *param)
       }
 
       /*
-    // check the health of the bus
-    can_status_info_t status;
-    can_get_status_info(&status);
-    SERIAL_DEBUG.printf("  rx-q:%d, tx-q:%d, rx-err:%d, tx-err:%d, arb-lost:%d, bus-err:%d, state: %s",
-                        status.msgs_to_rx, status.msgs_to_tx, status.rx_error_counter, status.tx_error_counter, status.arb_lost_count,
-                        status.bus_error_count, ESP32_CAN_STATUS_STRINGS[status.state]);
-    if (status.state == can_state_t::CAN_STATE_BUS_OFF)
-    {
-      // When the bus is OFF we need to initiate recovery, transmit is
-      // not possible when in this state.
-      SERIAL_DEBUG.printf("ESP32-CAN: initiating recovery");
-      can_initiate_recovery();
-    }
-    else if (status.state == can_state_t::CAN_STATE_RECOVERING)
-    {
-      // when the bus is in recovery mode transmit is not possible.
-      //delay(200);
-    }
-*/
+      // check the health of the bus
+      can_status_info_t status;
+      can_get_status_info(&status);
+      SERIAL_DEBUG.printf("  rx-q:%d, tx-q:%d, rx-err:%d, tx-err:%d, arb-lost:%d, bus-err:%d, state: %s",
+                          status.msgs_to_rx, status.msgs_to_tx, status.rx_error_counter, status.tx_error_counter, status.arb_lost_count,
+                          status.bus_error_count, ESP32_CAN_STATUS_STRINGS[status.state]);
+      if (status.state == can_state_t::CAN_STATE_BUS_OFF)
+      {
+        // When the bus is OFF we need to initiate recovery, transmit is
+        // not possible when in this state.
+        SERIAL_DEBUG.printf("ESP32-CAN: initiating recovery");
+        can_initiate_recovery();
+      }
+      else if (status.state == can_state_t::CAN_STATE_RECOVERING)
+      {
+        // when the bus is in recovery mode transmit is not possible.
+        //delay(200);
+      }
+      */
     }
     else
     {
