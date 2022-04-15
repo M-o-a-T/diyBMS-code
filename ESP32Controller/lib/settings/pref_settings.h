@@ -1,6 +1,8 @@
 #ifndef Settings_H // include guard
 #define Settings_H
 
+#include <inttypes.h>
+
 /*
 Settings storage with checksum (works with ESP32 devices)
 (c)2021 Stuart Pittaway
@@ -22,8 +24,8 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 class Settings
 {
 public:
-  static void WriteConfig(const char *tag, char *settings, int size);
-  static bool ReadConfig(const char *tag, char *settings, int size);
+  static void WriteConfig(const char *tag, const uint8_t *settings, int size);
+  static bool ReadConfig(const char *tag, uint8_t *settings, int size);
   static void FactoryDefault(const char *tag);
 };
 #endif

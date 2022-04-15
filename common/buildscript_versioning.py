@@ -38,7 +38,7 @@ with open(os.path.join(include_dir, 'EmbeddedFiles_Defines.h'), 'w') as f:
 #define EmbeddedFiles_Defines_H
 
 static const char GIT_VERSION[] = "{git_sha or 'LocalCompile'}";
-
+static const char GIT_VERSION_SHORT[] = "{git_sha[0:8] if git_sha else 'Local'}";
 static const uint32_t GIT_VERSION_B = 0x{git_sha[0:8] if git_sha else '0'};
 
 static const char COMPILE_DATE_TIME[] = "{datetime.datetime.utcnow().isoformat()[:-3]+'Z'}";

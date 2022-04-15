@@ -1002,15 +1002,14 @@ void onMqttConnect(bool sessionPresent)
 
 void LoadConfiguration()
 {
-  if (Settings::ReadConfigFromEEPROM((char *)&mysettings, sizeof(mysettings), EEPROM_SETTINGS_START_ADDRESS)) {
-    mysettings.baudRate = COMMS_BAUD_RATE;
+  if (Settings::ReadConfigFromEEPROM((uint8_t *)&mysettings, sizeof(mysettings), EEPROM_SETTINGS_START_ADDRESS) && mysettings.version == SETTINGS_VERSION)
     return;
-  }
 
   SERIAL_DEBUG.println(F("Apply default config"));
 
   //Zero all the bytes
   memset(&mysettings, 0, sizeof(mysettings));
+  mysettings.version = SETTINGS_VERSION;
 
   //Default to a single module
   mysettings.totalNumberOfBanks = 1;
@@ -1319,7 +1318,7 @@ void TerminalBasedWifiSetup(HardwareSerial stream)
       memset(&config, 0, sizeof(config));
       WiFi.SSID(index).toCharArray(config.wifi_ssid, sizeof(config.wifi_ssid));
       strcpy(config.wifi_passphrase, passwordbuffer);
-      Settings::WriteConfigToEEPROM((char *)&config, sizeof(config), EEPROM_WIFI_START_ADDRESS);
+      Settings::WriteConfigToEEPROM((uint8_t *)&config, sizeof(config), EEPROM_WIFI_START_ADDRESS);
     }
   }
 

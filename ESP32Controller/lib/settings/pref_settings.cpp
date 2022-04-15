@@ -1,9 +1,9 @@
-#include "settings.h"
+#include "pref_settings.h"
 #include "crc16.h"
 
 #include <Preferences.h>
 
-void Settings::WriteConfig(const char *tag, char *settings, int size)
+void Settings::WriteConfig(const char *tag, const uint8_t *settings, int size)
 {
   ESP_LOGD(TAG, "WriteConfig %s", tag);
 
@@ -18,7 +18,7 @@ void Settings::WriteConfig(const char *tag, char *settings, int size)
   prefs.end();
 }
 
-bool Settings::ReadConfig(const char *tag, char *settings, int size)
+bool Settings::ReadConfig(const char *tag, uint8_t *settings, int size)
 {
   uint16_t checksum, existingChecksum;
   ESP_LOGD(TAG, "ReadConfig %s", tag);

@@ -34,11 +34,15 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 
 #include "common.h"
 
+#define CONFIG_VERSION 1
+
 //Default values
 struct CellModuleConfig {
-  //uint8_t mybank; // only known to the controller
+  uint8_t version;
+  uint8_t _unused;
   uint16_t BypassTemperature;
   uint16_t BypassThreshold;
+  uint16_t _align;
 
   // Resistance of bypass load
   //float LoadResistance;  // hardcoded

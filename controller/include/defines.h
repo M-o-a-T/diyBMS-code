@@ -122,9 +122,12 @@ enum CurrentMonitorDevice : uint8_t
 #define SHOW_TIME_PERIOD 5000
 #define NTP_TIMEOUT 1500
 
+// 
+#define SETTINGS_VERSION 1
 struct diybms_eeprom_settings
 {
-  // TODO add version number and size here
+  uint8_t version;
+  uint8_t _unused;
   uint8_t totalNumberOfBanks;
   uint8_t totalNumberOfSeriesModules;
   uint16_t baudRate;

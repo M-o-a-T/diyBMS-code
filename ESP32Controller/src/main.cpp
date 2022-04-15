@@ -133,7 +133,7 @@ avrprogramsettings _avrsettings;
 
 QueueHandle_t rs485_transmit_q_handle;
 
-#include "settings.h"
+#include "pref_settings.h"
 #include "SoftAP.h"
 #include "DIYBMSServer.h"
 
@@ -2495,7 +2495,7 @@ void onMqttConnect(bool sessionPresent)
 
 void LoadConfiguration()
 {
-  if (Settings::ReadConfig("diybms", (char *)&mysettings, sizeof(mysettings)))
+  if (Settings::ReadConfig("diybms", (uint8_t *)&mysettings, sizeof(mysettings)))
     return;
 
   ESP_LOGI(TAG, "Apply default config");
@@ -2844,7 +2844,7 @@ void TerminalBasedWifiSetup(HardwareSerial stream)
       memset(&config, 0, sizeof(config));
       WiFi.SSID(index).toCharArray(config.wifi_ssid, sizeof(config.wifi_ssid));
       strcpy(config.wifi_passphrase, passwordbuffer);
-      Settings::WriteConfig("diybmswifi", (char *)&config, sizeof(config));
+      Settings::WriteConfig("diybmswifi", (uint8_t *)&config, sizeof(config));
     }
   }
 
@@ -2956,7 +2956,7 @@ bool LoadWiFiConfigFromSDCard(bool existingConfigValid)
             ESP_LOGD(TAG, "Wifi JSON SSID=%s", _config.wifi_ssid);
             ESP_LOGI(TAG, "Wifi config is different, saving");
 
-            Settings::WriteConfig("diybmswifi", (char *)&_config, sizeof(_config));
+            Settings::WriteConfig("diybmswifi", (uint8_t *)&_config, sizeof(_config));
 
             for (size_t i = 0; i < 5; i++)
             {

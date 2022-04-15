@@ -46,8 +46,7 @@ We now use a "standard" CRC library.
 
 "Factory reset" zeroed the checksum. But what if it was zero originally?
 Fix: We simply increment it. Nobody is going to do 65536 factory resets in
-a row. Also, we zero the first byte which really should contain a version
-number.
+a row.
 
 ### Modules on 5V
 
@@ -58,8 +57,6 @@ reset, turning the bypass on is not helpful.
 
 The protocol now has a version number, transmitted by the module in the
 header of its config data chunk.
-
-## Future Changes
 
 ### CRC polynomial
 
@@ -77,6 +74,11 @@ You can read a paper with more details
 
 Also, we might want to use a 4-bit lookup table (needs only 32 bytes in
 ROM) instead of looping through each bit.
+
+For expediency the EEPROM checksumming uses the same code. As a welcome
+side effect, this takes the ATtiny841's flash usage to <7kBytes.
+
+## Future Changes
 
 ### Fix queues
 

@@ -7,10 +7,12 @@
 #ifdef ESP32
 #include <WiFi.h>
 #include <AsyncTCP.h>
+#include "pref_settings.h"
 #else
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
 #include "ESP8266TrueRandom.h"
+#include "settings.h"
 #endif
 
 #include <ESPAsyncWebServer.h>
@@ -19,7 +21,6 @@
 
 #include "defines.h"
 #include "Rules.h"
-#include "settings.h"
 #include "ArduinoJson.h"
 #include "PacketRequestGenerator.h"
 #include "PacketReceiveProcessor.h"
@@ -73,9 +74,9 @@ private:
     static void saveConfiguration()
     {
 #ifdef ESP32
-        Settings::WriteConfig("diybms", (char *)_mysettings, sizeof(diybms_eeprom_settings));
+        Settings::WriteConfig("diybms", (uint8_t *)_mysettings, sizeof(diybms_eeprom_settings));
 #else
-        Settings::WriteConfigToEEPROM((char *)_mysettings, sizeof(diybms_eeprom_settings), EEPROM_SETTINGS_START_ADDRESS);
+        Settings::WriteConfigToEEPROM((uint8_t *)_mysettings, sizeof(diybms_eeprom_settings), EEPROM_SETTINGS_START_ADDRESS);
 #endif
     }
 #ifdef ESP32

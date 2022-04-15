@@ -6,7 +6,7 @@ bool Settings::WriteConfigToEEPROM(uint8_t* settings, uint16_t size, uint16_t ee
 
   uint16_t EEPROMaddress=eepromStartAddress;
   for (uint16_t i = 0; i < size; i++) {
-    EEPROM.update( EEPROMaddress, settings[i] );
+    EEPROM.put( EEPROMaddress, settings[i] );
     EEPROMaddress++;
   }
 

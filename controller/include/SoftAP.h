@@ -6,14 +6,15 @@
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
+#include "settings.h"
 #else // ESP32
 #include <WiFi.h>
 #include <AsyncTCP.h>
+#include "pref_settings.h"
 #endif
 
 #include <ESPAsyncWebServer.h>
 #include <EEPROM.h>
-#include "settings.h"
 
 //Where in EEPROM do we store the configuration
 #define EEPROM_WIFI_START_ADDRESS 0
