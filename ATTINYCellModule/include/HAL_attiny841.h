@@ -27,6 +27,21 @@ public:
       interrupts();
    }
 
+   bool getRX0Level()
+   {
+    return !!PINB & _BV(PA2);
+   }
+
+   void RX0IRQEnable()
+   {
+     GIMSK |= _BV(PCIE0);
+   }
+   
+   void RX0IRQDisable()
+   {
+     GIMSK &= ~_BV(PCIE0);
+   }
+
    static void StopTimer1()
    {
       //Switch OFF Bit 1 – OCIE1A: Timer/Counter, Output Compare A Match Interrupt Enable
@@ -148,6 +163,8 @@ public:
    }
    static bool CheckSerial0Idle()
    {
+      if(getRX0Level())
+        return false;
       return bit_is_set(UCSR0A, TXC0) && bit_is_set(UCSR0A, UDRE0);
    }
 
@@ -156,27 +173,40 @@ public:
       return bit_is_set(UCSR1A, TXC1) && bit_is_set(UCSR1A, UDRE1);
    }
 
+   // turn off the transmitter but leave the receiver alone
    static void DisableSerial0TX()
    {
-      UCSR0B &= ~_BV(TXEN0); //disable transmitter (saves 6mA)
+      UCSR0B &= ~_BV(TXEN0); // disable transmitter (saves 6mA)
    }
 
+   // turn on the transmitter. Clock / Rx should already be on
    static void EnableSerial0TX()
    {
       UCSR0B |= (1 << TXEN0); // enable transmitter
    }
 
+   // turn off the serial clock and receiver. Tx should already be off
+   static void DisableSerial0RX()
+   {
+      UCSR0B &= ~_BV(RXEN0); // disable serial and receiver
+   }
+
+   // turn on the serial clock and receiver. Tx stays off
+   static void EnableSerial0RX()
+   {
+      UCSR0B |= (1 << RXEN0); // enable serial and receiver
+   }
+
    static void DisableSerial0()
    {
-      //Disable serial0
-      UCSR0B &= ~_BV(RXEN0); //disable receiver
-      UCSR0B &= ~_BV(TXEN0); //disable transmitter
+      DisableSerial0TX();
+      DisableSerial0RX();
    }
 
    static void EnableSerial0()
    {
-      UCSR0B |= (1 << RXEN0); // enable RX Serial0
-      UCSR0B |= (1 << TXEN0); // enable TX Serial0
+      EnableSerial0RX();
+      EnableSerial0TX();
    }
 
    static void DisableSerial1()
@@ -195,8 +225,6 @@ public:
    {
       // Enable Start Frame Detection
       UCSR0D = (1 << RXSIE0) | (1 << SFDE0);
-
-      interrupts();
    }
 
    static void SetWatchdog8sec();

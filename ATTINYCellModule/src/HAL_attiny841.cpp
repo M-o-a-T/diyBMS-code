@@ -126,6 +126,10 @@ void HAL::ConfigurePorts()
   //Set the extra high sink capability of pin PA7 is enabled.
   PHDE |= _BV(PHDEA1);
 
+  //prepare for pin change interrupt on RX
+  //GIMSK |= _BV(PCIE0);
+  PCMSK0 |= _BV()
+
   //Set pins to initial state
   DumpLoadOff();
   ReferenceVoltageOff();
@@ -220,6 +224,9 @@ void HAL::Sleep()
   // disable ADC
   ADCSRA = 0;
 
+  // enable interrupts on RX
+  GIMSK |= _BV(PCIE0);
+
 #if DIYBMSMODULEVERSION < 440
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 #else
@@ -253,6 +260,7 @@ void HAL::Sleep()
   //power_timer2_enable();
 
   //power_all_enable();
+  //RX0IRQDisable();
 
   ADCSRA = old_ADCSRA;
 }

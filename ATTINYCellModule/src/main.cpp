@@ -119,9 +119,6 @@ ISR(ADC_vect)
 
 void onPacketHeader()
 {
-  HAL::EnableSerial0TX();
-
-  //A data packet has just arrived, process it and forward the results to the next module
   PP.onHeaderReceived((PacketHeader *)SerialPacketReceiveBuffer);
 }
 
@@ -135,11 +132,13 @@ void onPacketReceived()
   PP.onPacketReceived((PacketHeader *)SerialPacketReceiveBuffer);
 }
 
-ISR(USART0_START_vect)
+ISR(PCINT0_vect)
 {
-  //This interrupt exists just to wake up the CPU so that it can read
-  //voltage+temperature while the packet arrives
-  asm("NOP");
+  // Enable Serial when the remote transmitter is turned on.
+  if(HAL::getRX0Level()) {
+    HAL::RX0IRQDisable();
+    HAL::EnableSerial0Rx();
+  }
 }
 
 //Kp: Determines how aggressively the PID reacts to the current amount of error (Proportional)
@@ -328,7 +327,7 @@ void loop()
       myPID.clear();
 
       //Switch off TX - save power
-      //HAL::DisableSerial0TX();
+      HAL::DisableSerial0();
 
       //Wake up on Serial port RX
       HAL::EnableStartFrameDetection();
@@ -393,7 +392,12 @@ void loop()
   //Switch reference off if we are not in bypass (otherwise leave on)
   HAL::ReferenceVoltageOff();
 
+  // Test if we see a packet start, which would be a good time to enable TX,
+  // in order to wake up the next module.
+  bool wasIdle = myPacketSerial.isIdle();
   myPacketSerial.checkInputStream();
+  if(wasIdle && !myPacketSerial.isIdle())
+    HAL::EnableSerial0Tx();
 
   //We should probably check for invalid InternalTemperature ranges here and throw error (shorted or unconnecter thermistor for example)
   uint16_t internal_temperature = PP.InternalTemperature();
