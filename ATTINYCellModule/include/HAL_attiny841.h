@@ -27,17 +27,17 @@ public:
       interrupts();
    }
 
-   bool getRX0Level()
+   static bool getRX0Level()
    {
-    return !!PINB & _BV(PA2);
+    return !!(PINB & _BV(PA2));
    }
 
-   void RX0IRQEnable()
+   static void RX0IRQEnable()
    {
      GIMSK |= _BV(PCIE0);
    }
    
-   void RX0IRQDisable()
+   static void RX0IRQDisable()
    {
      GIMSK &= ~_BV(PCIE0);
    }
@@ -174,39 +174,39 @@ public:
    }
 
    // turn off the transmitter but leave the receiver alone
-   static void DisableSerial0TX()
+   static void DisableSerial0Tx()
    {
       UCSR0B &= ~_BV(TXEN0); // disable transmitter (saves 6mA)
    }
 
    // turn on the transmitter. Clock / Rx should already be on
-   static void EnableSerial0TX()
+   static void EnableSerial0Tx()
    {
       UCSR0B |= (1 << TXEN0); // enable transmitter
    }
 
    // turn off the serial clock and receiver. Tx should already be off
-   static void DisableSerial0RX()
+   static void DisableSerial0Rx()
    {
       UCSR0B &= ~_BV(RXEN0); // disable serial and receiver
    }
 
    // turn on the serial clock and receiver. Tx stays off
-   static void EnableSerial0RX()
+   static void EnableSerial0Rx()
    {
       UCSR0B |= (1 << RXEN0); // enable serial and receiver
    }
 
    static void DisableSerial0()
    {
-      DisableSerial0TX();
-      DisableSerial0RX();
+      DisableSerial0Tx();
+      DisableSerial0Rx();
    }
 
    static void EnableSerial0()
    {
-      EnableSerial0RX();
-      EnableSerial0TX();
+      EnableSerial0Rx();
+      EnableSerial0Tx();
    }
 
    static void DisableSerial1()

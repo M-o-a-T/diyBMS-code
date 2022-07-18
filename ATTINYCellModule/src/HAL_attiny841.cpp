@@ -127,8 +127,8 @@ void HAL::ConfigurePorts()
   PHDE |= _BV(PHDEA1);
 
   //prepare for pin change interrupt on RX
-  //GIMSK |= _BV(PCIE0);
-  PCMSK0 |= _BV()
+  GIMSK |= _BV(PCIE0);
+  PCMSK0 |= _BV(PCINT0);
 
   //Set pins to initial state
   DumpLoadOff();

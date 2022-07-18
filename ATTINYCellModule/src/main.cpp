@@ -230,6 +230,7 @@ void setup()
 
   //Set up data handler
   Serial.begin(BAUD, SERIAL_8N1);
+  DBGN("BOOT");
 
   myPacketSerial.begin(&Serial, &onPacketHeader, &onReadReceived, &onPacketReceived, SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer), sizeof(PacketHeader));
 
@@ -294,14 +295,11 @@ inline void identifyModule()
   }
 }
 
-static uint8_t lpc=0;
-
 void loop()
 {
   //This loop runs around 3 times per second when the module is in bypass
   wdt_reset();
 
-  if(!++lpc) Serial.write('L');
   if (PP.SettingsHaveChanged)
   {
     //The configuration has just been modified so stop balancing if we are and reset our status
@@ -327,7 +325,7 @@ void loop()
       myPID.clear();
 
       //Switch off TX - save power
-      HAL::DisableSerial0();
+      // HAL::DisableSerial0();
 
       //Wake up on Serial port RX
       HAL::EnableStartFrameDetection();
