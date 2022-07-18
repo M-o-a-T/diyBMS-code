@@ -38,13 +38,13 @@ uint16_t transmitOnePacket()
     
     // delay so modules can add data without getting overrun by the next
     // packet.
-	// Serial overhead: start(1) + len (1/2) plus CRC (2), plus some time
-	// for slack, so let's use 8.
-	// A byte takes 10 bits if no parity and one stop bit, but maybe a
-	// module interrupt delays sending and/or somebody decides to turn on
-	// parity.
-	uint16_t delay_ms = ((8+len + (uint32_t)meta->dataExpect * (header->cells+1)) * 12)
-		* (uint32_t)1000 / mysettings.baudRate;
+    // Serial overhead: start(1) + len (1/2) plus CRC (2), plus some time
+    // for slack, so let's use 8.
+    // A byte takes 10 bits if no parity and one stop bit, but maybe a
+    // module interrupt delays sending and/or somebody decides to turn on
+    // parity.
+    uint16_t delay_ms = ((8+len + (uint32_t)meta->dataExpect * (header->cells+1)) * 12)
+        * (uint32_t)1000 / mysettings.baudRate;
 
     myPacketSerial.sendStartFrame(len);
     myPacketSerial.sendBuffer(header, sizeof(PacketHeader)+meta->dataLen);
@@ -54,54 +54,54 @@ uint16_t transmitOnePacket()
       myPacketSerial.sendBuffer(&t,sizeof(t));
     
     myPacketSerial.sendEndFrame();
-	freePacket(meta);
-	return delay_ms;
+    freePacket(meta);
+    return delay_ms;
 }
 
 bool receiveOnePacket()
 {
-	PacketMeta *ps;
-	replyQueue.pop(&ps);
+    PacketMeta *ps;
+    replyQueue.pop(&ps);
 
-	return receiveProc.ProcessReply(ps);
+    return receiveProc.ProcessReply(ps);
 }
 
 static void onPacketHeader()
 {
-	// a CRC error is a packet for which onPacketReceived is not called
-	receiveProc.pendingCRCErrors += 1;
+    // a CRC error is a packet for which onPacketReceived is not called
+    receiveProc.pendingCRCErrors += 1;
 }
   
 static void onPacketReceived()
 {
-	// TODO flash green LED
-	// let's just count hacked-up packets as error
-	receiveProc.totalCRCErrors += receiveProc.pendingCRCErrors-1;
-	receiveProc.pendingCRCErrors = 0;
+    // TODO flash green LED
+    // let's just count hacked-up packets as error
+    receiveProc.totalCRCErrors += receiveProc.pendingCRCErrors-1;
+    receiveProc.pendingCRCErrors = 0;
 
-	if(myPacketSerial.receiveCount() < sizeof(struct PacketHeader)) {
-		receiveProc.totalNotProcessedErrors += 1;
-		return;
-	}
+    if(myPacketSerial.receiveCount() < sizeof(struct PacketHeader)) {
+        receiveProc.totalNotProcessedErrors += 1;
+        return;
+    }
 
-	PacketMeta *ps = (PacketMeta *)calloc(1,sizeof(PacketMeta)+myPacketSerial.receiveCount());
-	ps->dataLen = myPacketSerial.receiveCount();
-	ps->timestamp = millis();
-	memcpy(ps+1, SerialPacketReceiveBuffer, ps->dataLen);
+    PacketMeta *ps = (PacketMeta *)calloc(1,sizeof(PacketMeta)+myPacketSerial.receiveCount());
+    ps->dataLen = myPacketSerial.receiveCount();
+    ps->timestamp = millis();
+    memcpy(ps+1, SerialPacketReceiveBuffer, ps->dataLen);
 
-	if (!replyQueue.push(&ps))
-	{
-		// ESP_LOGE(TAG, "Reply Q full");
-		receiveProc.totalNotProcessedErrors += 1; // TODO?
-		freePacket(ps);
-	}
-	// TODO turn green LED off
+    if (!replyQueue.push(&ps))
+    {
+        // ESP_LOGE(TAG, "Reply Q full");
+        receiveProc.totalNotProcessedErrors += 1; // TODO?
+        freePacket(ps);
+    }
+    // TODO turn green LED off
 }
 
 
 void initSerializer()
 {
     myPacketSerial.begin(&SERIAL_DATA, &onPacketHeader, nullptr, &onPacketReceived,
-		SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer), sizeof(PacketHeader));
+        SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer), sizeof(PacketHeader));
 
 }
