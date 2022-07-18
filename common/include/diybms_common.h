@@ -22,14 +22,15 @@ enum COMMAND: uint8_t
 
 struct PacketHeader
 {
+  // Bits are filled form the bottom.
   uint8_t start;
-  unsigned int _reserved:2;
-  unsigned int global:1;
-  unsigned int seen:1;
   unsigned int command:4;
+  unsigned int seen:1;
+  unsigned int global:1;
+  unsigned int _reserved:2;
   uint8_t hops;
-  unsigned int cells:5;
   unsigned int sequence:3;
+  unsigned int cells:5;
 } __attribute__((packed));
 
 union FLOAT_UINT {
