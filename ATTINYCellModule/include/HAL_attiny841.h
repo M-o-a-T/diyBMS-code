@@ -169,8 +169,8 @@ public:
    static void DisableSerial0()
    {
       //Disable serial0
-      UCSR0B &= ~_BV(RXEN0); //disable receiver
-      UCSR0B &= ~_BV(TXEN0); //disable transmitter
+      //UCSR0B &= ~_BV(RXEN0); //disable receiver
+      //UCSR0B &= ~_BV(TXEN0); //disable transmitter
    }
 
    static void EnableSerial0()
@@ -181,8 +181,8 @@ public:
 
    static void DisableSerial1()
    {
-      UCSR1B &= ~_BV(RXEN1); //disable receiver
-      UCSR1B &= ~_BV(TXEN1); //disable transmitter
+      //UCSR1B &= ~_BV(RXEN1); //disable receiver
+      //UCSR1B &= ~_BV(TXEN1); //disable transmitter
    }
 
    static void EnableSerial1()
