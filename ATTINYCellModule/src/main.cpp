@@ -231,6 +231,7 @@ void setup()
 
   //Set up data handler
   Serial.begin(BAUD, SERIAL_8N1);
+  Serial.println("Reboot");
 
   myPacketSerial.begin(&Serial, &onPacketHeader, &onReadReceived, &onPacketReceived, SerialPacketReceiveBuffer, sizeof(SerialPacketReceiveBuffer), sizeof(PacketHeader));
 
