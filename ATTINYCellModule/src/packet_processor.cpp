@@ -286,7 +286,7 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
       data.voltRaw = raw_adc_voltage;
       if (BypassOverheatCheck())
         data.voltRaw |= 0x4000;
-      if (BypassOverheatCheck())
+      if (IsBypassActive())
         data.voltRaw |= 0x8000;
       serial->sendBuffer(&data,sizeof(data));
       break;
