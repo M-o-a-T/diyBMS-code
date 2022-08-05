@@ -296,14 +296,11 @@ inline void identifyModule()
   }
 }
 
-static uint8_t lpc=0;
-
 void loop()
 {
   //This loop runs around 3 times per second when the module is in bypass
   wdt_reset();
 
-  if(!++lpc) Serial.write('L');
   if (PP.SettingsHaveChanged)
   {
     //The configuration has just been modified so stop balancing if we are and reset our status
