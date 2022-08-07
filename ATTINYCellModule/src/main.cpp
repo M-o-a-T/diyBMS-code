@@ -102,6 +102,24 @@ void DefaultConfig()
 
   //Start bypass at 4.1V
   myConfig.BypassThreshold = 955 *SAMPLEAVERAGING; // 955 = 4100/4398*1024
+
+//Kp: Determines how aggressively the PID reacts to the current amount of error (Proportional)
+//Ki: Determines how aggressively the PID reacts to error over time (Integral)
+//Kd: Determines how aggressively the PID reacts to the change in error (Derivative)
+
+//6Hz rate - number of times we call this code in Loop
+//Kp, Ki, Kd, Hz, output_bits, output_signed);
+//Settings for V4.00 boards with 2R2 resistors = (4.0, 0.5, 0.2, 6, 8, false);
+//
+// The float values used in PID configuration were for °C inputs. Now
+// we use raw inputs which are ~10 times larger. Thus in order to keep the
+// PID behavior constant we divide by 10 here.
+//
+#define _PM (PARAM_MULT/10)
+  myConfig.kp = int(5.0*_PM);
+  myConfig.ki = int(1.0*_PM);
+  myConfig.kd = int(0.1*_PM);
+#undef _PM
 }
 
 ISR(WDT_vect)
@@ -142,14 +160,7 @@ ISR(USART0_START_vect)
   asm("NOP");
 }
 
-//Kp: Determines how aggressively the PID reacts to the current amount of error (Proportional)
-//Ki: Determines how aggressively the PID reacts to error over time (Integral)
-//Kd: Determines how aggressively the PID reacts to the change in error (Derivative)
-
-//6Hz rate - number of times we call this code in Loop
-//Kp, Ki, Kd, Hz, output_bits, output_signed);
-//Settings for V4.00 boards with 2R2 resistors = (4.0, 0.5, 0.2, 6, 8, false);
-FastPID myPID(5.0, 1.0, 0.1, 3, 8, false);
+FastPID myPID;
 
 void ValidateConfiguration()
 {
@@ -217,6 +228,7 @@ void setup()
   }
 
   ValidateConfiguration();
+  myPID.configure(myConfig.kp, myConfig.ki, myConfig.kd, 3, 8, false);
 
   HAL::double_tap_Notification_led();
 

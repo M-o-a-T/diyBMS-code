@@ -214,8 +214,18 @@ void PacketProcessor::onHeaderReceived(PacketHeader *header)
     more = sizeof(struct PacketReplySettings);
     goto ok;
 
+  case COMMAND::ReadPIDconfig:
+    more = sizeof(struct PacketPIDconfig);
+    goto ok;
+
   case COMMAND::WriteSettings:
     more = sizeof(struct PacketRequestConfig);
+    goto defer;
+
+  case COMMAND::WritePIDconfig:
+    more = sizeof(struct PacketPIDconfig);
+    goto defer;
+
   defer:
     if (header->global) {
       header->seen = 1;
@@ -245,6 +255,7 @@ void PacketProcessor::onReadReceived(PacketHeader *header)
   switch (header->command)
   {
   case COMMAND::WriteSettings:
+  case COMMAND::WritePIDconfig:
   case COMMAND::WriteBalanceLevel:
     header->seen = 1;
     // fall through, though TODO actually no other commands should be seen
@@ -311,6 +322,17 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
       break;
     }
 
+  case COMMAND::ReadPIDconfig:
+    {
+      struct PacketPIDconfig cfg;
+      cfg.kp = _config->kp;
+      cfg.ki = _config->ki;
+      cfg.kd = _config->kd;
+
+      serial->sendBuffer(&cfg,sizeof(cfg));
+      break;
+    }
+
   case COMMAND::ReadTemperature:
     {
       struct PacketReplyTemperature data;
@@ -374,6 +396,26 @@ void PacketProcessor::onPacketReceived(PacketHeader *header)
       if (data->bypassVoltRaw) {
         _config->BypassThreshold = data->bypassVoltRaw;
       }
+
+      //Save settings
+      Settings::WriteConfigToEEPROM((uint8_t *)_config, sizeof(CellModuleConfig), EEPROM_CONFIG_ADDRESS);
+
+      SettingsHaveChanged = true;
+
+      break;
+    }
+
+  case COMMAND::WritePIDconfig:
+    {
+      CHECK_LEN(PacketPIDconfig);
+
+      serial->sendEndFrame(false);
+
+      struct PacketPIDconfig *data = (PacketPIDconfig *)(header+1);
+
+      _config->kp = data->kp;
+      _config->ki = data->ki;
+      _config->kd = data->kd;
 
       //Save settings
       Settings::WriteConfigToEEPROM((uint8_t *)_config, sizeof(CellModuleConfig), EEPROM_CONFIG_ADDRESS);

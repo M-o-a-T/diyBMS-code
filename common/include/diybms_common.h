@@ -18,6 +18,8 @@ enum COMMAND: uint8_t
     ReadBalanceCurrentCounter=9,
     ResetBalanceCurrentCounter=10,
     WriteBalanceLevel=11,
+    WritePIDconfig=12,
+    ReadPIDconfig=13,
 };
 
 struct PacketHeader
@@ -59,6 +61,12 @@ struct PacketReplyCounters {
   uint16_t bad;
 } __attribute__((packed));
 
+struct PacketPIDconfig {
+  uint32_t kp;
+  uint32_t ki;
+  uint32_t kd;
+} __attribute__((packed));
+
 #define SETTINGS_VERSION 1
 struct PacketReplySettings {
 // this header must not change
@@ -87,6 +95,7 @@ struct PacketRequestBalance {
 union PacketRequestAny {
   struct PacketRequestConfig config;
   struct PacketRequestBalance setBalance;
+  struct PacketPIDconfig pidConfig;
 };
 
 // collect all possible response data. Used to auto-size the buffer.
@@ -95,6 +104,7 @@ union PacketResponseAny {
   struct PacketReplyVoltages voltages;
   struct PacketReplyTemperature temperatures;
   struct PacketReplyCounters counters;
+  struct PacketPIDconfig pidConfig;
 };
 
 //

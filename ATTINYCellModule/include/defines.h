@@ -51,6 +51,7 @@ struct CellModuleConfig {
   //uint16_t Internal_BCoefficient;
   //External Thermistor settings
   //uint16_t External_BCoefficient;
+  uint32_t kp, ki, kd;  // FastPID parameters
 } __attribute__((packed));
 
 #endif
