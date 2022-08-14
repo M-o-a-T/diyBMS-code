@@ -139,8 +139,11 @@ void onPacketHeader()
 {
   HAL::EnableSerial0TX();
 
-  //A data packet has just arrived, process it and forward the results to the next module
+  //A packet header has just arrived, process it
   PP.onHeaderReceived((PacketHeader *)SerialPacketReceiveBuffer);
+
+  // also, tell the watchdog that the system seems to be live
+  wdt_reset();
 }
 
 void onReadReceived()
@@ -311,8 +314,6 @@ inline void identifyModule()
 void loop()
 {
   //This loop runs around 3 times per second when the module is in bypass
-  wdt_reset();
-
   if (PP.SettingsHaveChanged)
   {
     //The configuration has just been modified so stop balancing if we are and reset our status
@@ -355,6 +356,7 @@ void loop()
 
   if (wdt_triggered)
   {
+    wdt_triggered = false;
 #if DIYBMSMODULEVERSION < 440
     //Flash blue LED twice after a watchdog wake up
     HAL::double_tap_blue_led();
@@ -478,6 +480,4 @@ void loop()
   {
     PP.bypassHasJustFinished--;
   }
-
-  wdt_triggered = false;
 }
