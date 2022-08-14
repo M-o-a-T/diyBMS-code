@@ -227,11 +227,14 @@ void setup()
   if (!Settings::ReadConfigFromEEPROM((uint8_t *)&myConfig, sizeof(myConfig), EEPROM_CONFIG_ADDRESS))
   {
     DefaultConfig();
+    // TEMP XXX try to read without the PID values
+    Settings::ReadConfigFromEEPROM((uint8_t *)&myConfig, sizeof(myConfig)-12, EEPROM_CONFIG_ADDRESS);
     //No need to save here, as the default config will load whenever the CRC is wrong
   }
 
   ValidateConfiguration();
   myPID.configure(myConfig.kp, myConfig.ki, myConfig.kd, 3, 8, false);
+  myPID.setOutputRange(0, 255);
 
   HAL::double_tap_Notification_led();
 
@@ -240,7 +243,6 @@ void setup()
 #endif
 
   //The PID can vary between 0 and 255 (1 byte)
-  myPID.setOutputRange(0, 255);
 
   StopBalance();
 
@@ -317,7 +319,10 @@ void loop()
   if (PP.SettingsHaveChanged)
   {
     //The configuration has just been modified so stop balancing if we are and reset our status
+    myPID.clear();
     StopBalance();
+    myPID.configure(myConfig.kp, myConfig.ki, myConfig.kd, 3, 8, false);
+    myPID.setOutputRange(0, 255);
   }
 
   noInterrupts();
@@ -444,9 +449,11 @@ void loop()
 
   if (PP.bypassCountDown > 0)
   {
-    if (internal_temperature < (myConfig.BypassTemperature - 6*temp_delta))
+    if (internal_temperature < (myConfig.BypassTemperature - 15*temp_delta))
     {
-      //Full power if we are nowhere near the setpoint (more than 6 degrees C away)
+      //Full power if we are far from the setpoint. This value is somewhat
+      //high because if you use a board with an external resistor the
+      //thermal lag may be substantial
       PP.PWMSetPoint = 0xFF;
     }
     else
